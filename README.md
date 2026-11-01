@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="docs/images/gocebe_penguen.png" alt="DistroNomad maskotu: göçebe penguen / DistroNomad mascot: the nomad penguin" width="200">
+
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Linux](https://img.shields.io/badge/platform-linux-green.svg)](https://www.kernel.org)
 [![TUI](https://img.shields.io/badge/TUI-Textual-orange.svg)](https://textual.textualize.io/)
@@ -11,6 +13,8 @@
 *Format atmadan veya yeni bir Linux dağıtımına geçmeden önce ayarlarınızı, uygulamalarınızı ve dosyalarınızı kayıpsız taşıyın.*
 
 [English](#-english) | [Türkçe](#-türkçe)
+
+<img src="docs/images/distronomad_tui.png" alt="DistroNomad TUI genel bakış ekranı / DistroNomad TUI overview screen" width="900">
 
 </div>
 
