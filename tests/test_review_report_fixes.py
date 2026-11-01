@@ -1255,10 +1255,11 @@ def test_fat_safeguard_archive_large_and_small_size(tmp_path, monkeypatch):
     existing_archive = tmp_path / "existing.tar.zst"
     existing_archive.write_bytes(b"x")
     orig_stat = Path.stat
-    def fake_stat_append(self):
+    # Python 3.10-3.11'de Path.lstat() içeride self.stat(follow_symlinks=False) çağırır; argümanlar aktarılmalıdır
+    def fake_stat_append(self, *args, **kwargs):
         if str(self) == str(existing_archive):
             return os.stat_result((0o100644, 0, 0, 1, 1000, 1000, 2 * 1024 * 1024 * 1024, 0, 0, 0))
-        return orig_stat(self)
+        return orig_stat(self, *args, **kwargs)
     monkeypatch.setattr(Path, "stat", fake_stat_append)
 
     append_cfgs = [ConfigItem(id="c2", name="app2", category="Genel", source_path=str(tmp_path), rel_path=".config/app2", size_bytes=2 * 1024 * 1024 * 1024)]
@@ -1289,10 +1290,10 @@ def test_fat_safeguard_archive_large_and_small_size(tmp_path, monkeypatch):
     # 4.2. Tek dosya >= 4 GiB -> has_risk=True
     test_file_big = tmp_path / "huge_file.iso"
     test_file_big.write_bytes(b"iso")
-    def fake_stat_big(self):
+    def fake_stat_big(self, *args, **kwargs):
         if str(self).endswith("huge_file.iso"):
             return os.stat_result((0o100644, 0, 0, 1, 1000, 1000, int(4.5 * 1024 * 1024 * 1024), 0, 0, 0))
-        return orig_stat(self)
+        return orig_stat(self, *args, **kwargs)
     monkeypatch.setattr(Path, "stat", fake_stat_big)
 
     cp_big = [CustomPathItem(path=str(test_file_big), size_bytes=int(4.5 * 1024 * 1024 * 1024))]

@@ -23,10 +23,8 @@ C_GREEN="\033[1;32m"
 C_YELLOW="\033[1;33m"
 C_RED="\033[1;31m"
 C_MAGENTA="\033[1;35m"
-C_BLUE="\033[1;34m"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFEST_FILE="${SCRIPT_DIR}/manifest.json"
 CONFIGS_DIR="${SCRIPT_DIR}/configs"
 CUSTOM_DIR="${SCRIPT_DIR}/custom"
 PACKAGES_DIR="${SCRIPT_DIR}/packages"
@@ -262,7 +260,7 @@ restore_configs() {
 
     # Dizinleri ve dosyaları hedef HOME dizinine kopyala
     find "${CONFIGS_DIR}" -mindepth 1 | while read -r src_item; do
-        rel_path="${src_item#${CONFIGS_DIR}/}"
+        rel_path="${src_item#"${CONFIGS_DIR}"/}"
         target_item="${TARGET_HOME}/${rel_path}"
 
         if [[ -n "${resolved_home}" ]]; then
@@ -345,7 +343,7 @@ restore_custom_files() {
         fi
 
         find "${CUSTOM_DIR}/home" -mindepth 1 | while read -r src_item; do
-            rel_path="${src_item#${CUSTOM_DIR}/home/}"
+            rel_path="${src_item#"${CUSTOM_DIR}"/home/}"
             target_item="${TARGET_HOME}/${rel_path}"
 
             if [[ -n "${resolved_home}" ]]; then
@@ -419,7 +417,7 @@ restore_custom_files() {
         fi
 
         find "${CUSTOM_DIR}/root" -mindepth 1 | while read -r src_item; do
-            rel_path="${src_item#${CUSTOM_DIR}/root/}"
+            rel_path="${src_item#"${CUSTOM_DIR}"/root/}"
             target_item="/${rel_path}"
 
             # Güvenlik ve Karar 3: Hedef ev dizini özel bir dizin olarak belirtildiğinden (--target-home vb.) asla köke yazma
@@ -639,8 +637,7 @@ install_packages() {
 
                                     if [[ ${#single_cmd[@]} -gt 0 ]]; then
                                         log_info "Paket kuruluyor: $p" "Installing package: $p"
-                                        "${single_cmd[@]}"
-                                        if [[ $? -eq 0 ]]; then
+                                        if "${single_cmd[@]}"; then
                                             log_success "Kuruldu: $p" "Installed: $p"
                                         else
                                             log_warn "Kurulamadı: $p" "Failed to install: $p"

@@ -12,12 +12,30 @@ from distronomad.models import (
     PackageItem,
     ConfigItem,
 )
+from distronomad.discovery import SystemScanner
 from distronomad.hardware import HardwareProfile, is_hardware_profile_different
 from distronomad.restore import RestoreEngine
 from distronomad.ui.app import DistroNomadApp
 from distronomad.cli import build_parser, cmd_restore
 from distronomad.i18n import t, set_current_language, get_current_language
 from textual.widgets import Checkbox, Label, RichLog
+
+
+@pytest.fixture(autouse=True)
+def arch_target_system(monkeypatch):
+    """Sürücü önerileri hedef dağıtım ailesine göre seçilir; testlerin CI'daki Ubuntu gibi farklı
+    dağıtımlarda da aynı sonucu vermesi için hedef sistem Arch (pacman) olarak sabitlenir."""
+    def as_arch(info: SystemInfo) -> SystemInfo:
+        info.distro_id = "arch"
+        info.distro_name = "Arch Linux"
+        info.distro_like = ""
+        info.available_package_managers = ["pacman"]
+        return info
+
+    orig_scan = SystemScanner.scan_system_info
+    orig_current = SystemInfo.current
+    monkeypatch.setattr(SystemScanner, "scan_system_info", lambda self: as_arch(orig_scan(self)))
+    monkeypatch.setattr(SystemInfo, "current", classmethod(lambda cls: as_arch(orig_current())))
 
 
 def _make_dummy_backup(dest_path: Path, hardware_info=None, packages=None) -> Path:

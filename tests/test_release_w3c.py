@@ -55,6 +55,27 @@ def test_w3c_bash_n_syntax_validation(tmp_path):
     assert res.returncode == 0, f"bash -n sözdizimi hatası verdi: {res.stderr}"
 
 
+def test_w3c_backup_dir_with_glob_characters_restores_to_correct_paths(tmp_path):
+    """Yedek dizininin adında [ ] * gibi kalıp karakterleri olsa da dosyalar hedef ev dizinine doğru göreli yolla yazılmalıdır."""
+    backup_dir = tmp_path / "yedek[1]*"
+    backup_dir.mkdir()
+    script_file = _create_restore_script(backup_dir)
+    _create_minimal_backup_env(backup_dir)
+    target_home = tmp_path / "target_home"
+    target_home.mkdir()
+
+    env = os.environ.copy()
+    env["LANG"] = env["LC_ALL"] = "C.UTF-8"
+    res = subprocess.run(
+        [str(script_file), "--configs-only", "--target-home", str(target_home)],
+        cwd=str(tmp_path), env=env, capture_output=True, text=True, input=""
+    )
+
+    assert res.returncode == 0, f"STDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
+    assert (target_home / ".bashrc").read_text() == "# mock bashrc\n"
+    assert not any(p.name == "configs" for p in target_home.rglob("*")), "Yedek yolu hedefin altına iç içe kopyalanmamalıdır."
+
+
 def test_w3c_shellcheck_if_installed(tmp_path):
     """shellcheck kuruluysa betiği statik analizden geçirir (kurulu değilse atlar)."""
     if not shutil.which("shellcheck"):

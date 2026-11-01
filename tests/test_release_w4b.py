@@ -17,6 +17,7 @@ import sys
 import tarfile
 from pathlib import Path
 import pytest
+import zstandard as zstd
 
 from distronomad.cli import (
     build_parser,
@@ -419,11 +420,12 @@ def test_network_secrets_skipped_in_unencrypted_backup(tmp_path):
         assert note is not None
         assert ("ağ sırları" in note.lower() or "network secrets" in note.lower())
 
-        # Fiziksel arşiv içeriğini de tara
-        with tarfile.open(final_path, "r") as tar:
-            names = tar.getnames()
-            assert not any("system-connections" in n or "OfficeWifi" in n for n in names)
-            assert not any("wireguard" in n or "wg0.conf" in n for n in names)
+        # Fiziksel arşiv içeriğini de tara (tarfile zstd'yi yalnızca Python 3.14+ açabildiği için zstandard ile akıtılır)
+        with open(final_path, "rb") as f_in, zstd.ZstdDecompressor().stream_reader(f_in) as reader:
+            with tarfile.open(fileobj=reader, mode="r|*") as tar:
+                names = tar.getnames()
+        assert not any("system-connections" in n or "OfficeWifi" in n for n in names)
+        assert not any("wireguard" in n or "wg0.conf" in n for n in names)
     finally:
         r_engine.cleanup()
 
