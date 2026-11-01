@@ -1,0 +1,205 @@
+{
+  "packages": {
+    "fd": {
+      "arch": "fd",
+      "debian": "fd-find",
+      "fedora": "fd-find",
+      "suse": "fd",
+      "alpine": "fd"
+    },
+    "bat": {
+      "arch": "bat",
+      "debian": "batcat",
+      "fedora": "bat",
+      "suse": "bat",
+      "alpine": "bat"
+    },
+    "build-essential": {
+      "arch": "base-devel",
+      "debian": "build-essential",
+      "fedora": "@development-tools",
+      "suse": "patterns-devel-base-devel_basis",
+      "alpine": "build-base"
+    },
+    "base-devel": {
+      "arch": "base-devel",
+      "debian": "build-essential",
+      "fedora": "@development-tools",
+      "suse": "patterns-devel-base-devel_basis",
+      "alpine": "build-base"
+    },
+    "python-pip": {
+      "arch": "python-pip",
+      "debian": "python3-pip",
+      "fedora": "python3-pip",
+      "suse": "python3-pip",
+      "alpine": "py3-pip"
+    },
+    "python3-pip": {
+      "arch": "python-pip",
+      "debian": "python3-pip",
+      "fedora": "python3-pip",
+      "suse": "python3-pip",
+      "alpine": "py3-pip"
+    },
+    "docker": {
+      "arch": "docker",
+      "debian": "docker.io",
+      "fedora": "moby-engine",
+      "suse": "docker",
+      "alpine": "docker"
+    },
+    "docker-compose": {
+      "arch": "docker-compose",
+      "debian": "docker-compose-v2",
+      "fedora": "docker-compose",
+      "suse": "docker-compose",
+      "alpine": "docker-cli-compose"
+    },
+    "neovim": {
+      "arch": "neovim",
+      "debian": "neovim",
+      "fedora": "neovim",
+      "suse": "neovim",
+      "alpine": "neovim"
+    },
+    "ripgrep": {
+      "arch": "ripgrep",
+      "debian": "ripgrep",
+      "fedora": "ripgrep",
+      "suse": "ripgrep",
+      "alpine": "ripgrep"
+    },
+    "btop": {
+      "arch": "btop",
+      "debian": "btop",
+      "fedora": "btop",
+      "suse": "btop",
+      "alpine": "btop"
+    },
+    "htop": {
+      "arch": "htop",
+      "debian": "htop",
+      "fedora": "htop",
+      "suse": "htop",
+      "alpine": "htop"
+    },
+    "alacritty": {
+      "arch": "alacritty",
+      "debian": "alacritty",
+      "fedora": "alacritty",
+      "suse": "alacritty",
+      "alpine": "alacritty"
+    },
+    "kitty": {
+      "arch": "kitty",
+      "debian": "kitty",
+      "fedora": "kitty",
+      "suse": "kitty",
+      "alpine": "kitty"
+    },
+    "zsh": {
+      "arch": "zsh",
+      "debian": "zsh",
+      "fedora": "zsh",
+      "suse": "zsh",
+      "alpine": "zsh"
+    },
+    "fish": {
+      "arch": "fish",
+      "debian": "fish",
+      "fedora": "fish",
+      "suse": "fish",
+      "alpine": "fish"
+    },
+    "tmux": {
+      "arch": "tmux",
+      "debian": "tmux",
+      "fedora": "tmux",
+      "suse": "tmux",
+      "alpine": "tmux"
+    },
+    "git": {
+      "arch": "git",
+      "debian": "git",
+      "fedora": "git",
+      "suse": "git",
+      "alpine": "git"
+    },
+    "curl": {
+      "arch": "curl",
+      "debian": "curl",
+      "fedora": "curl",
+      "suse": "curl",
+      "alpine": "curl"
+    },
+    "wget": {
+      "arch": "wget",
+      "debian": "wget",
+      "fedora": "wget",
+      "suse": "wget",
+      "alpine": "wget"
+    },
+    "jq": {
+      "arch": "jq",
+      "debian": "jq",
+      "fedora": "jq",
+      "suse": "jq",
+      "alpine": "jq"
+    },
+    "fzf": {
+      "arch": "fzf",
+      "debian": "fzf",
+      "fedora": "fzf",
+      "suse": "fzf",
+      "alpine": "fzf"
+    },
+    "eza": {
+      "arch": "eza",
+      "debian": "eza",
+      "fedora": "eza",
+      "suse": "eza",
+      "alpine": "eza"
+    },
+    "fastfetch": {
+      "arch": "fastfetch",
+      "debian": "fastfetch",
+      "fedora": "fastfetch",
+      "suse": "fastfetch",
+      "alpine": "fastfetch"
+    }
+  },
+  "flatpak": {
+    "firefox": "org.mozilla.firefox",
+    "chromium": "org.chromium.Chromium",
+    "google-chrome": "com.google.Chrome",
+    "spotify": "com.spotify.Client",
+    "spotify-launcher": "com.spotify.Client",
+    "discord": "com.discordapp.Discord",
+    "vlc": "org.videolan.VLC",
+    "gimp": "org.gimp.GIMP",
+    "inkscape": "org.inkscape.Inkscape",
+    "blender": "org.blender.Blender",
+    "obs": "com.obsproject.Studio",
+    "obs-studio": "com.obsproject.Studio",
+    "code": "com.visualstudio.code",
+    "vscode": "com.visualstudio.code",
+    "visual-studio-code": "com.visualstudio.code",
+    "vscodium": "com.vscodium.codium",
+    "telegram": "org.telegram.desktop",
+    "telegram-desktop": "org.telegram.desktop",
+    "steam": "com.valvesoftware.Steam",
+    "libreoffice": "org.libreoffice.LibreOffice",
+    "libreoffice-fresh": "org.libreoffice.LibreOffice",
+    "libreoffice-still": "org.libreoffice.LibreOffice",
+    "audacity": "org.audacityteam.Audacity",
+    "thunderbird": "org.mozilla.Thunderbird",
+    "kdenlive": "org.kde.kdenlive",
+    "qbittorrent": "org.qbittorrent.qBittorrent",
+    "transmission": "com.transmissionbt.Transmission",
+    "mpv": "io.mpv.Mpv",
+    "slack": "com.slack.Slack",
+    "signal-desktop": "org.signal.Signal",
+    "calibre": "com.calibre_ebook.calibre"
+  }
+}

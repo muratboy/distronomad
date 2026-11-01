@@ -1,0 +1,11 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include run.sh
+include distronomad/ui/styles.tcss
+include distronomad/data/package_map.json
+recursive-include distronomad *.py *.tcss *.json
+recursive-include tests *.py
+include tests/conftest.py
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

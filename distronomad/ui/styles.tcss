@@ -1,0 +1,1420 @@
+/* ==============================================================================
+   DistroNomad - Modern Cyberpunk & btop++ Terminal Teması
+   ============================================================================== */
+
+Screen {
+    background: #0d1117;
+    color: #c9d1d9;
+}
+
+Header {
+    background: #161b22;
+    color: #00e5ff;
+    text-style: bold;
+    height: 1;
+}
+
+Footer {
+    background: #161b22;
+    color: #8b949e;
+    height: 1;
+}
+
+/* ==================== ÜST BİLGİ VE DURUM ÇUBUĞU ==================== */
+#top-bar {
+    layout: horizontal;
+    height: 3;
+    background: #161b22;
+    border-bottom: heavy #00e5ff;
+    padding: 0 1;
+    align: center middle;
+}
+
+#brand-label {
+    width: 22;
+    text-style: bold;
+    color: #00e5ff;
+}
+
+#system-badge {
+    width: 1fr;
+    color: #50fa7b;
+    text-align: center;
+}
+
+#btn-top-lang {
+    width: 15;
+    background: #21262d;
+    color: #00e5ff;
+    border: none;
+    text-style: bold;
+    margin-right: 1;
+}
+
+#btn-top-lang:hover {
+    background: #30363d;
+    color: #ffffff;
+}
+
+#btn-top-automation {
+    width: 25;
+    background: #21262d;
+    color: #50fa7b;
+    border: none;
+    text-style: bold;
+    margin-right: 1;
+}
+
+#btn-top-automation:hover {
+    background: #30363d;
+    color: #ffffff;
+}
+
+#theme-badge-btn {
+    width: 24;
+    background: #21262d;
+    color: #f1fa8c;
+    border: none;
+    text-style: bold;
+}
+
+#theme-badge-btn:hover {
+    background: #30363d;
+    color: #ffffff;
+}
+
+/* ==================== SEKME ÇUBUĞU (TABS) ==================== */
+TabbedContent {
+    background: transparent;
+}
+
+TabPane {
+    padding: 1 2;
+}
+
+Tabs {
+    background: #161b22;
+    color: #8b949e;
+    height: 3;
+    border-bottom: solid #30363d;
+}
+
+Tab {
+    background: transparent;
+    color: #8b949e;
+    padding: 0 2;
+    border: none;
+    text-style: none;
+}
+
+Tab:hover {
+    background: #21262d;
+    color: #ffffff;
+}
+
+/* Aktif Sekme: KESİNLİKLE OKUNABİLİR SİYAH YAZI, PARLAK NEON CAMGÖBEĞİ ZEMİN */
+Tab.-active,
+ContentTab.-active,
+Tabs .-active,
+Tabs:focus .-active,
+Tabs:focus Tab.-active,
+Tab.-active:focus,
+Tab.-active:hover {
+    background: #00e5ff !important;
+    color: #000000 !important;
+    text-style: bold !important;
+}
+
+Tab:focus {
+    background: #21262d;
+    color: #00e5ff;
+}
+
+Underline, .underline--bar {
+    display: none !important;
+}
+
+/* ==================== KARTLAR VE PANELLER ==================== */
+.card {
+    background: #161b22;
+    border: round #30363d;
+    padding: 1;
+    margin-bottom: 1;
+    height: auto;
+}
+
+.card:focus-within {
+    border: round #00e5ff;
+}
+
+.card-title {
+    text-style: bold;
+    color: #00e5ff;
+    margin-bottom: 1;
+}
+
+.card-subtitle {
+    text-style: bold;
+    color: #f1fa8c;
+    margin-bottom: 1;
+}
+
+.info-line {
+    color: #c9d1d9;
+    margin-bottom: 0;
+}
+
+/* ==================== GENEL BAKIŞ ÖZET KUTULARI ==================== */
+.summary-row {
+    layout: horizontal;
+    height: 6;
+    margin-bottom: 1;
+}
+
+.summary-box {
+    width: 1fr;
+    background: #1f242c;
+    border: round #30363d;
+    padding: 0 1;
+    margin: 0 1;
+    align: center middle;
+    content-align: center middle;
+}
+
+.summary-box:focus-within {
+    border: round #00e5ff;
+}
+
+.summary-box-title {
+    text-style: bold;
+    color: #8b949e;
+    text-align: center;
+}
+
+.summary-box-number {
+    text-style: bold;
+    color: #00e5ff;
+    text-align: center;
+}
+
+.summary-box-label {
+    color: #50fa7b;
+    text-align: center;
+}
+
+/* ==================== ARAÇ ÇUBUĞU VE ARAMA ==================== */
+.toolbar {
+    layout: horizontal;
+    height: 3;
+    margin-bottom: 1;
+    align: left middle;
+}
+
+.toolbar-multiline {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.toolbar-multiline .toolbar-row {
+    layout: horizontal;
+    height: 3;
+    align: left middle;
+}
+
+.search-input {
+    width: 1fr;
+    border: round #30363d;
+    background: #161b22;
+    color: #ffffff;
+}
+
+.search-input:focus {
+    border: round #00e5ff;
+}
+
+.btn-group {
+    layout: horizontal;
+    width: auto;
+    margin-left: 1;
+}
+
+.counter-badge {
+    color: #f1fa8c;
+    text-style: bold;
+    padding: 0 1;
+    margin-left: 1;
+}
+
+Button {
+    border: none;
+    background: #21262d;
+    color: #c9d1d9;
+    margin-right: 1;
+}
+
+Button:hover {
+    background: #30363d;
+    color: #ffffff;
+}
+
+Button.btn-primary {
+    background: #0088cc;
+    color: #ffffff;
+    text-style: bold;
+}
+
+Button.btn-primary:hover {
+    background: #00aaff;
+}
+
+Button.btn-success {
+    background: #238636;
+    color: #ffffff;
+    text-style: bold;
+}
+
+Button.btn-success:hover {
+    background: #2ea043;
+}
+
+Button.btn-danger {
+    background: #da3633;
+    color: #ffffff;
+}
+
+Button.btn-danger:hover {
+    background: #f85149;
+}
+
+Button.btn-action-large {
+    width: 100%;
+    height: 3;
+    margin-top: 1;
+    background: #0088cc;
+    color: #ffffff;
+    text-style: bold;
+    border: heavy #00e5ff;
+}
+
+Button.btn-action-large:hover {
+    background: #00e5ff;
+    color: #0d1117;
+}
+
+/* ==================== SEÇİM LİSTELERİ VE ONAY KUTULARI ==================== */
+SelectionList {
+    background: #161b22;
+    border: round #30363d;
+    height: 1fr;
+    padding: 1;
+}
+
+SelectionList:focus {
+    border: round #00e5ff;
+}
+
+.restore-selection-list {
+    height: 10;
+    max-height: 14;
+    border: round #30363d;
+    background: #161b22;
+    margin-top: 1;
+    padding: 0 1;
+}
+
+.restore-selection-list:focus {
+    border: round #00e5ff;
+}
+
+Checkbox {
+    background: transparent;
+    color: #c9d1d9;
+    padding: 0 1;
+    margin-bottom: 0;
+}
+
+Checkbox:focus {
+    color: #00e5ff;
+    text-style: bold;
+}
+
+Checkbox.-on {
+    color: #50fa7b;
+    text-style: bold;
+}
+
+/* ==================== RADİO SET VE RADİO BUTONLARI ==================== */
+RadioSet {
+    background: transparent;
+    border: none;
+    margin: 1 0;
+    height: auto;
+}
+
+RadioButton {
+    background: transparent;
+    color: #8b949e;
+    padding: 0 1;
+    margin: 0;
+}
+
+RadioButton:hover {
+    color: #ffffff;
+}
+
+RadioButton:focus {
+    color: #00e5ff;
+}
+
+RadioButton.-selected, RadioButton.-on {
+    color: #00e5ff !important;
+    text-style: bold;
+}
+
+RadioButton.-selected > .toggle--label,
+RadioButton.-on > .toggle--label {
+    color: #ffffff !important;
+    text-style: bold;
+}
+
+RadioButton.-selected > .toggle--button,
+RadioButton.-on > .toggle--button {
+    color: #00e5ff !important;
+}
+
+/* ==================== KAYDIRILABİLİR ALANLAR VE LOG KONSOLU ==================== */
+.scroll-panel {
+    height: 1fr;
+    overflow-y: scroll;
+}
+
+#backup-log, #restore-log {
+    background: #090d13;
+    border: round #30363d;
+    height: 8;
+    min-height: 6;
+    max-height: 12;
+    color: #50fa7b;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#backup-progress, #restore-progress {
+    margin-top: 1;
+    margin-bottom: 0;
+    color: #00e5ff;
+}
+
+.field-label {
+    color: #bd93f9;
+    text-style: bold;
+    margin-top: 1;
+    margin-bottom: 0;
+}
+
+#lbl-append-info {
+    background: #111822;
+    border-left: thick #00e5ff;
+    padding: 0 1;
+    margin-top: 1;
+    margin-bottom: 1;
+    height: auto;
+}
+
+/* ==================== YEDEKLEME SEPETİ (DATA TABLE) ==================== */
+#table-backup-cart {
+    height: 12;
+    min-height: 8;
+    max-height: 16;
+    border: round #30363d;
+    background: #161b22;
+    margin-top: 1;
+    margin-bottom: 1;
+}
+
+#table-backup-cart:focus {
+    border: round #00e5ff;
+}
+
+#table-backup-cart > .datatable--cursor {
+    background: #00e5ff;
+    color: #000000;
+    text-style: bold;
+}
+
+#cart-actions-toolbar {
+    height: auto;
+    margin-top: 1;
+    margin-bottom: 1;
+    align-vertical: middle;
+}
+
+#btn-cart-remove-selected {
+    background: #da3633;
+    color: #ffffff;
+    text-style: bold;
+}
+
+#btn-cart-remove-selected:hover {
+    background: #f85149;
+}
+
+#btn-cart-remove-filtered {
+    background: #8957e5;
+    color: #ffffff;
+    text-style: bold;
+}
+
+#btn-cart-remove-filtered:hover {
+    background: #a371f7;
+}
+
+#btn-cart-clear-all {
+    background: #21262d;
+    color: #ff7b72;
+    border: tall #ff7b72;
+}
+
+#btn-cart-clear-all:hover {
+    background: #da3633;
+    color: #ffffff;
+}
+
+/* ==================== MODALLAR VE DİYALOGLAR ==================== */
+FilePickerModal, PasswordModal, DiffViewerModal, RollbackModal, AutomationModal {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+#file-picker-dialog {
+    width: 90%;
+    height: 85%;
+    background: #161b22;
+    border: heavy #00e5ff;
+    padding: 1 2;
+}
+
+#password-dialog {
+    width: 60;
+    height: auto;
+    background: #161b22;
+    border: heavy #00e5ff;
+    padding: 1 2;
+}
+
+#pwd-modal-title {
+    text-style: bold;
+    color: #00e5ff;
+    margin-bottom: 1;
+}
+
+#pwd-modal-prompt {
+    color: #c9d1d9;
+    margin-bottom: 1;
+}
+
+#pwd-buttons {
+    height: 3;
+    margin-top: 1;
+    layout: horizontal;
+    align: right middle;
+}
+
+#pwd-buttons Button {
+    margin-left: 1;
+}
+
+#diff-dialog {
+    width: 95%;
+    height: 90%;
+    background: #161b22;
+    border: heavy #00e5ff;
+    padding: 1 2;
+}
+
+#diff-title {
+    text-style: bold;
+    color: #00e5ff;
+    margin-bottom: 1;
+}
+
+#diff-container {
+    height: 1fr;
+    layout: horizontal;
+}
+
+#diff-file-list {
+    width: 32;
+    height: 1fr;
+    border-right: solid #30363d;
+    padding-right: 1;
+}
+
+#diff-files-scroll {
+    height: 1fr;
+}
+
+#diff-files-list {
+    height: 1fr;
+    background: #161b22;
+    border: none;
+}
+
+.btn-diff-file {
+    width: 100%;
+    text-align: left;
+    margin-bottom: 1;
+    background: #21262d;
+    color: #c9d1d9;
+    border: none;
+}
+
+.btn-diff-file:hover {
+    background: #30363d;
+    color: #00e5ff;
+}
+
+#diff-content-panel {
+    width: 1fr;
+    height: 1fr;
+    padding-left: 1;
+}
+
+#diff-file-header {
+    text-style: bold;
+    color: #50fa7b;
+    margin-bottom: 1;
+}
+
+#diff-log {
+    height: 1fr;
+    border: round #30363d;
+    background: #0d1117;
+}
+
+#diff-bottom-bar {
+    height: 3;
+    layout: horizontal;
+    align: right middle;
+    margin-top: 1;
+}
+
+#diff-count-label {
+    color: #8b949e;
+}
+
+#rollback-dialog {
+    width: 70;
+    height: auto;
+    background: #161b22;
+    border: heavy #ff5555;
+    padding: 1 2;
+}
+
+#rollback-title {
+    text-style: bold;
+    color: #ff5555;
+    margin-bottom: 1;
+}
+
+#rollback-desc {
+    color: #c9d1d9;
+    margin-bottom: 1;
+}
+
+#rollback-buttons {
+    height: 3;
+    layout: horizontal;
+    align: right middle;
+}
+
+#rollback-buttons Button {
+    margin-left: 1;
+}
+
+#fat32-dialog {
+    width: 72;
+    height: auto;
+    background: #161b22;
+    border: heavy #ffb86c;
+    padding: 1 2;
+}
+
+#fat32-title {
+    text-style: bold;
+    color: #ffb86c;
+    margin-bottom: 1;
+}
+
+#fat32-desc {
+    color: #c9d1d9;
+    margin-bottom: 1;
+}
+
+#fat32-buttons {
+    height: 3;
+    layout: horizontal;
+    align: right middle;
+}
+
+#fat32-buttons Button {
+    margin-left: 1;
+}
+
+
+#auto-dialog {
+    width: 75;
+    height: auto;
+    background: #161b22;
+    border: heavy #00e5ff;
+    padding: 1 2;
+}
+
+#auto-title {
+    text-style: bold;
+    color: #00e5ff;
+    margin-bottom: 1;
+}
+
+#auto-current-status {
+    color: #50fa7b;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#auto-buttons {
+    height: 3;
+    margin-top: 1;
+    layout: horizontal;
+    align: right middle;
+}
+
+#confirm-quit-dialog {
+    width: 65;
+    max-width: 90%;
+    height: auto;
+    background: #161b22;
+    border: heavy #ff5555;
+    padding: 1 2;
+}
+
+#confirm-quit-title {
+    text-style: bold;
+    color: #ff5555;
+    margin-bottom: 1;
+}
+
+#confirm-quit-desc {
+    color: #c9d1d9;
+    margin-bottom: 1;
+}
+
+#confirm-quit-buttons {
+    height: 3;
+    margin-top: 1;
+    layout: horizontal;
+    align: right middle;
+}
+
+#auto-buttons Button {
+    margin-left: 1;
+}
+
+/* Donanım ve Sürücü Tavsiye Kartı */
+#hw-rec-card {
+    height: auto;
+    border: round #ffb86c;
+    background: #1c1815;
+    padding: 1;
+    margin-bottom: 1;
+}
+
+#hw-rec-title {
+    color: #ffb86c;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#hw-rec-text {
+    color: #f1fa8c;
+}
+
+#row-restore-drivers {
+    height: auto;
+    margin-top: 1;
+    align-vertical: middle;
+}
+
+#lbl-restore-drivers-pkgs {
+    color: #50fa7b;
+    margin-left: 1;
+    padding-top: 1;
+}
+
+#picker-title {
+    text-style: bold;
+    color: #00e5ff;
+    margin-bottom: 1;
+}
+
+#picker-shortcuts {
+    height: 3;
+    margin-bottom: 1;
+    layout: horizontal;
+}
+
+#picker-shortcuts Button {
+    margin-right: 1;
+    background: #21262d;
+    color: #c9d1d9;
+}
+
+#picker-shortcuts Button:hover {
+    background: #30363d;
+    color: #00e5ff;
+}
+
+#picker-tree {
+    height: 1fr;
+    border: round #30363d;
+    background: #0d1117;
+    margin-bottom: 1;
+}
+
+#picker-tree:focus {
+    border: round #00e5ff;
+}
+
+#picker-selected-path {
+    color: #50fa7b;
+    text-style: bold;
+    margin-bottom: 1;
+    background: #1f242c;
+    padding: 0 1;
+}
+
+#picker-buttons {
+    height: 3;
+    layout: horizontal;
+    align: right middle;
+}
+
+#help-markdown {
+    background: #161b22;
+    padding: 1 2;
+    border: round #30363d;
+}
+
+/* ==============================================================================
+   TEMA VARYASYONLARI (THEME PALETTES)
+   ============================================================================== */
+
+/* 1. TOKYO NIGHT TEMASI */
+Screen.theme-tokyonight {
+    background: #1a1b26;
+    color: #c0caf5;
+}
+
+Screen.theme-tokyonight Header {
+    background: #16161e;
+    color: #7aa2f7;
+    border: none;
+}
+
+Screen.theme-tokyonight #top-bar {
+    background: #16161e;
+    border: none;
+    border-bottom: heavy #7aa2f7;
+}
+
+Screen.theme-tokyonight Tabs {
+    background: #16161e;
+    color: #787c99;
+    border: none;
+    border-bottom: solid #414868;
+}
+
+Screen.theme-tokyonight Footer {
+    background: #16161e;
+    color: #787c99;
+    border: none;
+}
+
+Screen.theme-tokyonight .card,
+Screen.theme-tokyonight SelectionList,
+Screen.theme-tokyonight .restore-selection-list,
+Screen.theme-tokyonight .search-input,
+Screen.theme-tokyonight #table-backup-cart,
+Screen.theme-tokyonight #backup-log,
+Screen.theme-tokyonight #restore-log,
+Screen.theme-tokyonight #diff-log,
+Screen.theme-tokyonight #help-markdown,
+Screen.theme-tokyonight #picker-tree {
+    background: #24283b;
+    border: round #414868;
+    color: #c0caf5;
+}
+
+Screen.theme-tokyonight .summary-box {
+    background: #1f2335;
+    border: round #414868;
+}
+
+Screen.theme-tokyonight .card:focus-within,
+Screen.theme-tokyonight .summary-box:focus-within,
+Screen.theme-tokyonight .search-input:focus,
+Screen.theme-tokyonight SelectionList:focus,
+Screen.theme-tokyonight .restore-selection-list:focus,
+Screen.theme-tokyonight #table-backup-cart:focus,
+Screen.theme-tokyonight #picker-tree:focus {
+    border: round #7aa2f7;
+}
+
+Screen.theme-tokyonight #brand-label,
+Screen.theme-tokyonight .card-title,
+Screen.theme-tokyonight .summary-box-number,
+Screen.theme-tokyonight #picker-title,
+Screen.theme-tokyonight #diff-title,
+Screen.theme-tokyonight #pwd-modal-title {
+    color: #7aa2f7;
+}
+
+Screen.theme-tokyonight .summary-box-title {
+    color: #787c99;
+}
+
+Screen.theme-tokyonight .summary-box-label {
+    color: #73daca;
+}
+
+Screen.theme-tokyonight Tab {
+    color: #787c99;
+}
+
+Screen.theme-tokyonight Tab:hover {
+    background: #24283b;
+    color: #c0caf5;
+}
+
+Screen.theme-tokyonight Tab.-active,
+Screen.theme-tokyonight ContentTab.-active,
+Screen.theme-tokyonight Tabs:focus .-active,
+Screen.theme-tokyonight Tabs:focus Tab.-active,
+Screen.theme-tokyonight Tab.-active:focus,
+Screen.theme-tokyonight Tab.-active:hover {
+    background: #7aa2f7 !important;
+    color: #15161e !important;
+    text-style: bold !important;
+}
+
+Screen.theme-tokyonight Button {
+    background: #292e42;
+    color: #c0caf5;
+}
+
+Screen.theme-tokyonight Button:hover {
+    background: #3b4261;
+    color: #ffffff;
+}
+
+Screen.theme-tokyonight #btn-top-lang,
+Screen.theme-tokyonight #btn-top-automation,
+Screen.theme-tokyonight #theme-badge-btn {
+    background: #24283b;
+    color: #7aa2f7;
+}
+
+Screen.theme-tokyonight #btn-top-lang:hover,
+Screen.theme-tokyonight #btn-top-automation:hover,
+Screen.theme-tokyonight #theme-badge-btn:hover {
+    background: #2f3549;
+    color: #ffffff;
+}
+
+/* 2. DRACULA TEMASI */
+Screen.theme-dracula {
+    background: #21222c;
+    color: #f8f8f2;
+}
+
+Screen.theme-dracula Header {
+    background: #191a21;
+    color: #bd93f9;
+    border: none;
+}
+
+Screen.theme-dracula #top-bar {
+    background: #191a21;
+    border: none;
+    border-bottom: heavy #bd93f9;
+}
+
+Screen.theme-dracula Tabs {
+    background: #191a21;
+    color: #6272a4;
+    border: none;
+    border-bottom: solid #44475a;
+}
+
+Screen.theme-dracula Footer {
+    background: #191a21;
+    color: #6272a4;
+    border: none;
+}
+
+Screen.theme-dracula .card,
+Screen.theme-dracula SelectionList,
+Screen.theme-dracula .restore-selection-list,
+Screen.theme-dracula .search-input,
+Screen.theme-dracula #table-backup-cart,
+Screen.theme-dracula #backup-log,
+Screen.theme-dracula #restore-log,
+Screen.theme-dracula #diff-log,
+Screen.theme-dracula #help-markdown,
+Screen.theme-dracula #picker-tree {
+    background: #282a36;
+    border: round #44475a;
+    color: #f8f8f2;
+}
+
+Screen.theme-dracula .summary-box {
+    background: #343746;
+    border: round #44475a;
+}
+
+Screen.theme-dracula .card:focus-within,
+Screen.theme-dracula .summary-box:focus-within,
+Screen.theme-dracula .search-input:focus,
+Screen.theme-dracula SelectionList:focus,
+Screen.theme-dracula .restore-selection-list:focus,
+Screen.theme-dracula #table-backup-cart:focus,
+Screen.theme-dracula #picker-tree:focus {
+    border: round #bd93f9;
+}
+
+Screen.theme-dracula #brand-label,
+Screen.theme-dracula .card-title,
+Screen.theme-dracula .summary-box-number,
+Screen.theme-dracula #picker-title,
+Screen.theme-dracula #diff-title,
+Screen.theme-dracula #pwd-modal-title {
+    color: #bd93f9;
+}
+
+Screen.theme-dracula .summary-box-title {
+    color: #6272a4;
+}
+
+Screen.theme-dracula .summary-box-label {
+    color: #50fa7b;
+}
+
+Screen.theme-dracula Tab {
+    color: #6272a4;
+}
+
+Screen.theme-dracula Tab:hover {
+    background: #282a36;
+    color: #f8f8f2;
+}
+
+Screen.theme-dracula Tab.-active,
+Screen.theme-dracula ContentTab.-active,
+Screen.theme-dracula Tabs:focus .-active,
+Screen.theme-dracula Tabs:focus Tab.-active,
+Screen.theme-dracula Tab.-active:focus,
+Screen.theme-dracula Tab.-active:hover {
+    background: #bd93f9 !important;
+    color: #282a36 !important;
+    text-style: bold !important;
+}
+
+Screen.theme-dracula Button {
+    background: #343746;
+    color: #f8f8f2;
+}
+
+Screen.theme-dracula Button:hover {
+    background: #44475a;
+    color: #ffffff;
+}
+
+Screen.theme-dracula #btn-top-lang,
+Screen.theme-dracula #btn-top-automation,
+Screen.theme-dracula #theme-badge-btn {
+    background: #282a36;
+    color: #bd93f9;
+}
+
+Screen.theme-dracula #btn-top-lang:hover,
+Screen.theme-dracula #btn-top-automation:hover,
+Screen.theme-dracula #theme-badge-btn:hover {
+    background: #383a59;
+    color: #ffffff;
+}
+
+/* 3. NORD TEMASI */
+Screen.theme-nord {
+    background: #2e3440;
+    color: #eceff4;
+}
+
+Screen.theme-nord Header {
+    background: #242933;
+    color: #88c0d0;
+    border: none;
+}
+
+Screen.theme-nord #top-bar {
+    background: #242933;
+    border: none;
+    border-bottom: heavy #88c0d0;
+}
+
+Screen.theme-nord Tabs {
+    background: #242933;
+    color: #d8dee9;
+    border: none;
+    border-bottom: solid #4c566a;
+}
+
+Screen.theme-nord Footer {
+    background: #242933;
+    color: #d8dee9;
+    border: none;
+}
+
+Screen.theme-nord .card,
+Screen.theme-nord SelectionList,
+Screen.theme-nord .restore-selection-list,
+Screen.theme-nord .search-input,
+Screen.theme-nord #table-backup-cart,
+Screen.theme-nord #backup-log,
+Screen.theme-nord #restore-log,
+Screen.theme-nord #diff-log,
+Screen.theme-nord #help-markdown,
+Screen.theme-nord #picker-tree {
+    background: #3b4252;
+    border: round #4c566a;
+    color: #eceff4;
+}
+
+Screen.theme-nord .summary-box {
+    background: #434c5e;
+    border: round #4c566a;
+}
+
+Screen.theme-nord .card:focus-within,
+Screen.theme-nord .summary-box:focus-within,
+Screen.theme-nord .search-input:focus,
+Screen.theme-nord SelectionList:focus,
+Screen.theme-nord .restore-selection-list:focus,
+Screen.theme-nord #table-backup-cart:focus,
+Screen.theme-nord #picker-tree:focus {
+    border: round #88c0d0;
+}
+
+Screen.theme-nord #brand-label,
+Screen.theme-nord .card-title,
+Screen.theme-nord .summary-box-number,
+Screen.theme-nord #picker-title,
+Screen.theme-nord #diff-title,
+Screen.theme-nord #pwd-modal-title {
+    color: #88c0d0;
+}
+
+Screen.theme-nord .summary-box-title {
+    color: #d8dee9;
+}
+
+Screen.theme-nord .summary-box-label {
+    color: #a3be8c;
+}
+
+Screen.theme-nord Tab {
+    color: #d8dee9;
+}
+
+Screen.theme-nord Tab:hover {
+    background: #3b4252;
+    color: #eceff4;
+}
+
+Screen.theme-nord Tab.-active,
+Screen.theme-nord ContentTab.-active,
+Screen.theme-nord Tabs:focus .-active,
+Screen.theme-nord Tabs:focus Tab.-active,
+Screen.theme-nord Tab.-active:focus,
+Screen.theme-nord Tab.-active:hover {
+    background: #88c0d0 !important;
+    color: #2e3440 !important;
+    text-style: bold !important;
+}
+
+Screen.theme-nord Button {
+    background: #434c5e;
+    color: #eceff4;
+}
+
+Screen.theme-nord Button:hover {
+    background: #4c566a;
+    color: #ffffff;
+}
+
+Screen.theme-nord #btn-top-lang,
+Screen.theme-nord #btn-top-automation,
+Screen.theme-nord #theme-badge-btn {
+    background: #3b4252;
+    color: #88c0d0;
+}
+
+Screen.theme-nord #btn-top-lang:hover,
+Screen.theme-nord #btn-top-automation:hover,
+Screen.theme-nord #theme-badge-btn:hover {
+    background: #434c5e;
+    color: #ffffff;
+}
+
+/* 4. CACHYOS / EMERALD TEMASI */
+Screen.theme-emerald {
+    background: #0d1314;
+    color: #e0f2f1;
+}
+
+Screen.theme-emerald Header {
+    background: #090e0f;
+    color: #00d26a;
+    border: none;
+}
+
+Screen.theme-emerald #top-bar {
+    background: #090e0f;
+    border: none;
+    border-bottom: heavy #00d26a;
+}
+
+Screen.theme-emerald Tabs {
+    background: #090e0f;
+    color: #729b9e;
+    border: none;
+    border-bottom: solid #243b3d;
+}
+
+Screen.theme-emerald Footer {
+    background: #090e0f;
+    color: #729b9e;
+    border: none;
+}
+
+Screen.theme-emerald .card,
+Screen.theme-emerald SelectionList,
+Screen.theme-emerald .restore-selection-list,
+Screen.theme-emerald .search-input,
+Screen.theme-emerald #table-backup-cart,
+Screen.theme-emerald #backup-log,
+Screen.theme-emerald #restore-log,
+Screen.theme-emerald #diff-log,
+Screen.theme-emerald #help-markdown,
+Screen.theme-emerald #picker-tree {
+    background: #141f21;
+    border: round #243b3d;
+    color: #e0f2f1;
+}
+
+Screen.theme-emerald .summary-box {
+    background: #1a292b;
+    border: round #243b3d;
+}
+
+Screen.theme-emerald .card:focus-within,
+Screen.theme-emerald .summary-box:focus-within,
+Screen.theme-emerald .search-input:focus,
+Screen.theme-emerald SelectionList:focus,
+Screen.theme-emerald .restore-selection-list:focus,
+Screen.theme-emerald #table-backup-cart:focus,
+Screen.theme-emerald #picker-tree:focus {
+    border: round #00d26a;
+}
+
+Screen.theme-emerald #brand-label,
+Screen.theme-emerald .card-title,
+Screen.theme-emerald .summary-box-number,
+Screen.theme-emerald #picker-title,
+Screen.theme-emerald #diff-title,
+Screen.theme-emerald #pwd-modal-title {
+    color: #00d26a;
+}
+
+Screen.theme-emerald .summary-box-title {
+    color: #729b9e;
+}
+
+Screen.theme-emerald .summary-box-label {
+    color: #50fa7b;
+}
+
+Screen.theme-emerald Tab {
+    color: #729b9e;
+}
+
+Screen.theme-emerald Tab:hover {
+    background: #141f21;
+    color: #e0f2f1;
+}
+
+Screen.theme-emerald Tab.-active,
+Screen.theme-emerald ContentTab.-active,
+Screen.theme-emerald Tabs:focus .-active,
+Screen.theme-emerald Tabs:focus Tab.-active,
+Screen.theme-emerald Tab.-active:focus,
+Screen.theme-emerald Tab.-active:hover {
+    background: #00d26a !important;
+    color: #090e0f !important;
+    text-style: bold !important;
+}
+
+Screen.theme-emerald Button {
+    background: #1a292b;
+    color: #e0f2f1;
+}
+
+Screen.theme-emerald Button:hover {
+    background: #243b3d;
+    color: #ffffff;
+}
+
+Screen.theme-emerald #btn-top-lang,
+Screen.theme-emerald #btn-top-automation,
+Screen.theme-emerald #theme-badge-btn {
+    background: #141f21;
+    color: #00d26a;
+}
+
+Screen.theme-emerald #btn-top-lang:hover,
+Screen.theme-emerald #btn-top-automation:hover,
+Screen.theme-emerald #theme-badge-btn:hover {
+    background: #1e3033;
+    color: #ffffff;
+}
+
+/* 5. MONOKAI TEMASI */
+Screen.theme-monokai {
+    background: #121212;
+    color: #f8f8f2;
+}
+
+Screen.theme-monokai Header {
+    background: #181818;
+    color: #e6db74;
+    border: none;
+}
+
+Screen.theme-monokai #top-bar {
+    background: #181818;
+    border: none;
+    border-bottom: heavy #e6db74;
+}
+
+Screen.theme-monokai Tabs {
+    background: #181818;
+    color: #75715e;
+    border: none;
+    border-bottom: solid #3e3d32;
+}
+
+Screen.theme-monokai Footer {
+    background: #181818;
+    color: #75715e;
+    border: none;
+}
+
+Screen.theme-monokai .card,
+Screen.theme-monokai SelectionList,
+Screen.theme-monokai .restore-selection-list,
+Screen.theme-monokai .search-input,
+Screen.theme-monokai #table-backup-cart,
+Screen.theme-monokai #backup-log,
+Screen.theme-monokai #restore-log,
+Screen.theme-monokai #diff-log,
+Screen.theme-monokai #help-markdown,
+Screen.theme-monokai #picker-tree {
+    background: #1e1e1e;
+    border: round #3e3d32;
+    color: #f8f8f2;
+}
+
+Screen.theme-monokai .summary-box {
+    background: #282828;
+    border: round #3e3d32;
+}
+
+Screen.theme-monokai .card:focus-within,
+Screen.theme-monokai .summary-box:focus-within,
+Screen.theme-monokai .search-input:focus,
+Screen.theme-monokai SelectionList:focus,
+Screen.theme-monokai .restore-selection-list:focus,
+Screen.theme-monokai #table-backup-cart:focus,
+Screen.theme-monokai #picker-tree:focus {
+    border: round #e6db74;
+}
+
+Screen.theme-monokai #brand-label,
+Screen.theme-monokai .card-title,
+Screen.theme-monokai .summary-box-number,
+Screen.theme-monokai #picker-title,
+Screen.theme-monokai #diff-title,
+Screen.theme-monokai #pwd-modal-title {
+    color: #e6db74;
+}
+
+Screen.theme-monokai .summary-box-title {
+    color: #75715e;
+}
+
+Screen.theme-monokai .summary-box-label {
+    color: #a6e22e;
+}
+
+Screen.theme-monokai Tab {
+    color: #75715e;
+}
+
+Screen.theme-monokai Tab:hover {
+    background: #1e1e1e;
+    color: #f8f8f2;
+}
+
+Screen.theme-monokai Tab.-active,
+Screen.theme-monokai ContentTab.-active,
+Screen.theme-monokai Tabs:focus .-active,
+Screen.theme-monokai Tabs:focus Tab.-active,
+Screen.theme-monokai Tab.-active:focus,
+Screen.theme-monokai Tab.-active:hover {
+    background: #e6db74 !important;
+    color: #121212 !important;
+    text-style: bold !important;
+}
+
+Screen.theme-monokai Button {
+    background: #282828;
+    color: #f8f8f2;
+}
+
+Screen.theme-monokai Button:hover {
+    background: #3e3d32;
+    color: #ffffff;
+}
+
+Screen.theme-monokai #btn-top-lang,
+Screen.theme-monokai #btn-top-automation,
+Screen.theme-monokai #theme-badge-btn {
+    background: #1e1e1e;
+    color: #e6db74;
+}
+
+Screen.theme-monokai #btn-top-lang:hover,
+Screen.theme-monokai #btn-top-automation:hover,
+Screen.theme-monokai #theme-badge-btn:hover {
+    background: #282828;
+    color: #ffffff;
+}

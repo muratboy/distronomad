@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "distronomad"
+version = "0.9.0"
+description = "DistroNomad - Seamless Linux Distro Migration, Backup & Dotfiles Manager"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Murat Boy" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Archiving :: Backup",
+]
+dependencies = [
+    "textual>=0.70.0",
+    "rich>=13.0.0",
+    "zstandard>=0.20.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/muratboy/distronomad"
+Repository = "https://github.com/muratboy/distronomad"
+Issues = "https://github.com/muratboy/distronomad/issues"
+Changelog = "https://github.com/muratboy/distronomad/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+]
+
+[project.scripts]
+distronomad = "distronomad.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["distronomad*"]
+
+[tool.setuptools.package-data]
+"distronomad" = ["data/*.json"]
+"distronomad.ui" = ["*.tcss"]
+"distronomad.data" = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
