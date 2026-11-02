@@ -292,7 +292,9 @@ def _verify_archive_file(
                 with tarfile.open(fileobj=decomp_stream, mode="r|*") as tar:
                     for member in tar:
                         norm_name = _norm_path(member.name)
-                        if norm_name == "manifest.json" or norm_name.endswith("/manifest.json"):
+                        # Yalnızca kökteki manifest yedeğe aittir; tarayıcı eklentileri gibi uygulamaların
+                        # kendi manifest.json dosyaları sıradan yedek dosyasıdır ve hash'leri doğrulanır.
+                        if norm_name == "manifest.json":
                             f = tar.extractfile(member)
                             if f:
                                 content = f.read()

@@ -357,7 +357,8 @@ def read_manifest_from_backup(
             with tarfile.open(fileobj=decomp_stream, mode="r|*") as tar:
                 for member in tar:
                     norm_name = member.name.replace("\\", "/").lstrip("./").lstrip("/")
-                    if norm_name == "manifest.json" or norm_name.endswith("/manifest.json"):
+                    # Yalnızca kökteki manifest yedeğe aittir (yedeklenen uygulamaların kendi manifest.json'ları değil)
+                    if norm_name == "manifest.json":
                         f = tar.extractfile(member)
                         if f:
                             data = json.loads(f.read().decode("utf-8", errors="surrogateescape"))

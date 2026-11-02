@@ -970,6 +970,22 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "tr": "İptal Et",
         "en": "Cancel"
     },
+    "browser_running_title": {
+        "tr": "⚠️ Açık Tarayıcı veya E-posta İstemcisi",
+        "en": "⚠️ Browser or Mail Client Running"
+    },
+    "backup_warn_browsers_running": {
+        "tr": "Şu anda açık: {names}. Bu uygulamalar yedekleme sırasında çerez, geçmiş ve oturum dosyalarına yazmaya devam eder; bu dosyalar tutarsız yedeklenebilir ve doğrulamada uyuşmayan görünebilir. En iyi sonuç için yedeklemeden önce kapatın.",
+        "en": "Currently running: {names}. These apps keep writing to their cookie, history and session files during the backup; those files may be captured inconsistently and show up as mismatched during verification. For best results, close them before backing up."
+    },
+    "btn_browser_proceed": {
+        "tr": "Yine de Devam Et",
+        "en": "Proceed Anyway"
+    },
+    "btn_browser_cancel": {
+        "tr": "İptal Et",
+        "en": "Cancel"
+    },
     "err_efbig_fat32_limit": {
         "tr": "Dosya boyutu sınırı aşıldı (FAT32 tek dosya sınırı 4 GB). Yarım kalan çıktı temizlendi. USB belleğinizi exFAT veya ext4 olarak biçimlendirmeniz önerilir.",
         "en": "File size limit exceeded (FAT32 single file limit is 4 GB). Incomplete output cleaned up. Recommended to format USB drive as exFAT or ext4."

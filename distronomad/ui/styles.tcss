@@ -481,7 +481,7 @@ RadioButton.-on > .toggle--button {
 }
 
 /* ==================== MODALLAR VE DİYALOGLAR ==================== */
-FilePickerModal, PasswordModal, DiffViewerModal, RollbackModal, AutomationModal {
+FilePickerModal, PasswordModal, DiffViewerModal, RollbackModal, AutomationModal, BrowserRunningModal {
     align: center middle;
     background: rgba(0, 0, 0, 0.75);
 }
@@ -658,6 +658,35 @@ FilePickerModal, PasswordModal, DiffViewerModal, RollbackModal, AutomationModal 
 }
 
 #fat32-buttons Button {
+    margin-left: 1;
+}
+
+#browser-dialog {
+    width: 72;
+    height: auto;
+    background: #161b22;
+    border: heavy #ffb86c;
+    padding: 1 2;
+}
+
+#browser-title {
+    text-style: bold;
+    color: #ffb86c;
+    margin-bottom: 1;
+}
+
+#browser-desc {
+    color: #c9d1d9;
+    margin-bottom: 1;
+}
+
+#browser-buttons {
+    height: 3;
+    layout: horizontal;
+    align: right middle;
+}
+
+#browser-buttons Button {
     margin-left: 1;
 }
 

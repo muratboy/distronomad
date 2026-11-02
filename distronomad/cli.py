@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.panel import Panel
 
 from distronomad import __version__, __app_name__
-from distronomad.discovery import SystemScanner
+from distronomad.discovery import SystemScanner, find_running_browsers
 from distronomad.models import RestoreOptions, CustomPathItem
 from distronomad.backup import BackupEngine, check_fat32_risk, Fat32LimitError
 from distronomad.restore import RestoreEngine, rollback_restore
@@ -284,6 +284,14 @@ def cmd_backup(args):
                     console.print(f"[bold yellow]⚠️  {risk.message}[/bold yellow]")
                     console.print(f"[yellow]{t('cli_fat32_force_proceed')}[/yellow]")
 
+        # Açık tarayıcılar profil dosyalarına yazmaya devam eder (zamanlanmış yedekte soru sorulamayacağı için yalnızca uyarılır)
+        running_browsers = find_running_browsers(
+            [c.source_path for c in configs if c.is_selected] + [cp.path for cp in target_custom if cp.is_selected],
+            home_dir=sys_info.home_dir
+        )
+        if running_browsers:
+            console.print(f"[bold yellow]⚠️  {t('backup_warn_browsers_running', names=', '.join(running_browsers))}[/bold yellow]")
+
         console.print(f"[bold cyan]{t('cli_backup_starting', dest=output_path, format=fmt)}[/bold cyan]")
 
         def progress_callback(update):
@@ -461,6 +469,13 @@ def cmd_append(args):
                 else:
                     console.print(f"[bold yellow]⚠️  {risk.message}[/bold yellow]")
                     console.print(f"[yellow]{t('cli_fat32_force_proceed')}[/yellow]")
+
+        running_browsers = find_running_browsers(
+            [c.source_path for c in selected_configs] + [cp.path for cp in selected_custom],
+            home_dir=sys_info.home_dir
+        )
+        if running_browsers:
+            console.print(f"[bold yellow]⚠️  {t('backup_warn_browsers_running', names=', '.join(running_browsers))}[/bold yellow]")
 
         console.print(f"[bold cyan]{t('cli_append_starting', dest=backup_path)}[/bold cyan]")
 

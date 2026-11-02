@@ -386,6 +386,28 @@ class Fat32WarningModal(ModalScreen[bool]):
             self.dismiss(False)
 
 
+class BrowserRunningModal(ModalScreen[bool]):
+    """Yedeklenecek profili açık olan tarayıcı / e-posta istemcisi uyarısı ve onay modalı."""
+
+    def __init__(self, names: str):
+        super().__init__()
+        self.names = names
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="browser-dialog"):
+            yield Label(t("browser_running_title"), id="browser-title")
+            yield Label(t("backup_warn_browsers_running", names=self.names), id="browser-desc")
+            with Horizontal(id="browser-buttons"):
+                yield Button(t("btn_browser_proceed"), id="btn-browser-proceed", classes="btn-warning")
+                yield Button(t("btn_browser_cancel"), id="btn-browser-cancel", classes="btn-primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-browser-proceed":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+
 class ConfirmExitModal(ModalScreen[bool]):
     """Devam eden bir işlem varken uygulamadan çıkış onay modalı."""
 

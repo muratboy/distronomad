@@ -41,7 +41,7 @@ from distronomad.models import (
     RestoreOptions,
     format_bytes,
 )
-from distronomad.discovery import SystemScanner, get_dir_size_and_count, KNOWN_CONFIG_CATEGORIES
+from distronomad.discovery import SystemScanner, get_dir_size_and_count, KNOWN_CONFIG_CATEGORIES, find_running_browsers
 from distronomad.backup import BackupEngine, read_manifest_from_backup, scan_and_compare_entries, check_fat32_risk
 from distronomad.restore import RestoreEngine, rollback_restore
 from distronomad.crypto import is_encrypted_file
@@ -56,6 +56,7 @@ from distronomad.ui.modal import (
     RollbackModal,
     AutomationModal,
     Fat32WarningModal,
+    BrowserRunningModal,
     ConfirmExitModal,
 )
 from distronomad.i18n import (
@@ -2127,7 +2128,7 @@ class DistroNomadApp(App):
                 log.write(f"    - {item['name']} ({item['reason']})")
         self.notify(t("inc_preview_summary", count=len(changed), size=saved_str))
 
-    def _handle_start_backup(self) -> None:
+    def _handle_start_backup(self, browsers_confirmed: bool = False) -> None:
         if getattr(self, "_is_backing_up", False):
             self.notify(t("backup_notify_already_running"), severity="warning")
             return
@@ -2198,6 +2199,23 @@ class DistroNomadApp(App):
             mode_label = t("backup_mode_label_incremental")
         else:
             mode_label = t("backup_mode_label_full")
+
+        # Açık tarayıcılar profil dosyalarına yazmaya devam eder; başlamadan önce kapatma fırsatı ver
+        if not browsers_confirmed:
+            running_browsers = find_running_browsers(
+                [c.source_path for c in self.all_configs if c.is_selected]
+                + [cp.path for cp in self.all_custom_paths if cp.is_selected],
+                home_dir=self.system_info.home_dir
+            )
+            if running_browsers:
+                def on_browsers_confirmed(confirmed: Optional[bool]) -> None:
+                    if confirmed:
+                        self._handle_start_backup(browsers_confirmed=True)
+                    else:
+                        self.notify(t("backup_aborted_by_user"), severity="information")
+
+                self.push_screen(BrowserRunningModal(", ".join(running_browsers)), on_browsers_confirmed)
+                return
 
         risk = check_fat32_risk(
             target_path=output_path,

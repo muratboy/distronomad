@@ -143,6 +143,58 @@ def get_dir_size_and_count(path: Path) -> Tuple[int, int]:
     return total_size, total_count
 
 
+# Açıkken profil dosyalarına (çerez, geçmiş, oturum veritabanları) sürekli yazan tarayıcı ve e-posta istemcileri:
+# (görünen ad, süreç adları, ev dizinine göre profil dizinleri)
+PROFILE_WRITING_APPS = [
+    ("Firefox", ("firefox", "firefox-esr", "firefox-bin"), (".mozilla/firefox", ".config/mozilla/firefox", ".var/app/org.mozilla.firefox")),
+    ("Thunderbird", ("thunderbird", "thunderbird-bin"), (".thunderbird", ".var/app/org.mozilla.Thunderbird")),
+    ("Zen", ("zen", "zen-bin"), (".zen", ".var/app/app.zen_browser.zen")),
+    ("LibreWolf", ("librewolf", "librewolf-bin"), (".librewolf", ".var/app/io.gitlab.librewolf-community")),
+    ("Waterfox", ("waterfox", "waterfox-bin"), (".waterfox",)),
+    ("Brave", ("brave",), (".config/BraveSoftware", ".var/app/com.brave.Browser")),
+    ("Google Chrome", ("chrome",), (".config/google-chrome", ".var/app/com.google.Chrome")),
+    ("Chromium", ("chromium",), (".config/chromium", ".var/app/org.chromium.Chromium")),
+    ("Vivaldi", ("vivaldi-bin",), (".config/vivaldi",)),
+    ("Opera", ("opera",), (".config/opera",)),
+    ("Microsoft Edge", ("msedge",), (".config/microsoft-edge",)),
+]
+
+
+def find_running_browsers(selected_paths: List[str], home_dir: Optional[str] = None) -> List[str]:
+    """Profil dizini seçili yedek yollarıyla çakışan ve şu anda açık olan tarayıcı / e-posta istemcilerinin adlarını döndürür.
+    Bu uygulamalar yedekleme sırasında profil dosyalarına yazmaya devam ettiği için o dosyalar tutarsız yedeklenebilir."""
+    if not selected_paths or not shutil.which("pgrep"):
+        return []
+    process_names = sorted({name for _, names, _ in PROFILE_WRITING_APPS for name in names})
+    try:
+        res = subprocess.run(
+            ["pgrep", "-l", "-x", "-u", str(os.getuid()), "|".join(process_names)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5
+        )
+    except Exception:
+        return []
+    if res.returncode != 0:
+        return []
+    running = {parts[1].strip() for parts in (line.split(None, 1) for line in res.stdout.splitlines()) if len(parts) == 2}
+
+    home = Path(home_dir) if home_dir else Path.home()
+    selected = [Path(os.path.abspath(p)) for p in selected_paths]
+    found = []
+    for display_name, names, profile_dirs in PROFILE_WRITING_APPS:
+        if not running.intersection(names):
+            continue
+        for rel in profile_dirs:
+            profile = Path(os.path.abspath(home / rel))
+            # Profil seçili yolun içindeyse (ör. tüm ~/.config) veya seçili yol profilin içindeyse çakışır
+            if any(s == profile or s in profile.parents or profile in s.parents for s in selected):
+                found.append(display_name)
+                break
+    return found
+
+
 class SystemScanner:
     """Sistem, uygulama, ayar ve dosya tarayıcısı."""
 
