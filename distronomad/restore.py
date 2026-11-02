@@ -38,6 +38,7 @@ from distronomad.archive import (
 from distronomad.crypto import decrypt_archive, is_encrypted_file
 from distronomad.backup import read_manifest_from_backup, safe_copytree
 from distronomad.hardware import scan_hardware_profile
+from distronomad import drivers
 from distronomad.i18n import t
 
 
@@ -399,6 +400,8 @@ class RestoreEngine:
             "installed_packages": [],
             "failed_packages": [],
             "untranslated_packages": [],
+            "skipped_driver_packages": [],
+            "driver_report": {},
             "skipped_external_paths": [],
             "restored_system_state": [],
             "warnings": [],
@@ -769,6 +772,13 @@ class RestoreEngine:
 
                         pm = pkg.manager
                         if pm in ["pacman", "yay", "paru", "apt", "apt-get", "dnf", "zypper"]:
+                            # Çekirdek sürücüsü paketleri (NVIDIA, Broadcom wl) açık kaynak sürücüyü kapatır; modül
+                            # bu sistemin çekirdeği için derlenemezse açılışta siyah ekran olur. Yedekteki eski
+                            # donanıma ait liste yerine yalnızca sürücü seçeneğiyle, denetimli adımda kurulurlar.
+                            if drivers.is_kernel_driver_package(target_name):
+                                results["skipped_driver_packages"].append(target_name)
+                                continue
+
                             target_pm = target_sys_pm or pm
 
                             # Dağıtım ailesini paket yöneticisine göre de tahmin et (distro_id bilinmiyorsa)
@@ -825,26 +835,29 @@ class RestoreEngine:
                                     # Depoda olmayanlar kurulumdan çıkarılıp raporlansın
                                     results["untranslated_packages"].append(pkg.name)
 
-                # Canlı donanım taramasına göre sürücü paketlerini ekle
+                if results["skipped_driver_packages"]:
+                    warn_msg = t(
+                        "restore_warn_driver_pkgs_from_backup",
+                        count=len(results["skipped_driver_packages"]),
+                        pkgs=", ".join(results["skipped_driver_packages"])
+                    )
+                    logger.warning(warn_msg)
+                    results["warnings"].append(warn_msg)
+
+                # Canlı donanım taramasına göre sürücü paketleri: çekirdek modülü kurmayanlar (mikro kod, mesa)
+                # diğer paketlerle birlikte kurulur; modül kuranlar aşağıda ayrı, denetimli ve doğrulamalı adımdadır.
+                driver_plan = None
                 if options.install_drivers:
                     live_hw = scan_hardware_profile()
-                    fam_key = target_family
-                    if fam_key == "unknown":
-                        fam_key = target_fam_eff if target_fam_eff != "unknown" else "arch"
+                    fam_key, eff_pm = drivers.resolve_driver_target(current_sys)
                     driver_pkgs = live_hw.recommended_packages.get(fam_key, [])
-                    if not driver_pkgs and fam_key in ["arch", "debian", "fedora", "suse"]:
-                        driver_pkgs = live_hw.recommended_packages.get(fam_key, [])
-                    if driver_pkgs:
-                        eff_pm = target_sys_pm or (
-                            "pacman" if fam_key == "arch" else
-                            "apt-get" if fam_key == "debian" else
-                            "dnf" if fam_key == "fedora" else
-                            "zypper" if fam_key == "suse" else "pacman"
-                        )
-                        for dpkg in driver_pkgs:
+                    if driver_pkgs and eff_pm:
+                        driver_plan = drivers.build_driver_plan(driver_pkgs, fam_key, eff_pm)
+                        for dpkg in driver_plan.plain_packages:
                             if dpkg not in pkgs_by_pm.setdefault(eff_pm, []):
                                 pkgs_by_pm[eff_pm].append(dpkg)
 
+                apt_updated = False
                 for pm, pkg_list in pkgs_by_pm.items():
                     if not pkg_list:
                         continue
@@ -875,6 +888,7 @@ class RestoreEngine:
                         if options.dry_run:
                             results["installed_packages"].append(t("restore_dry_run_apt_update"))
                         else:
+                            apt_updated = True
                             self._notify("kurulum", t("restore_notify_apt_update"))
                             try:
                                 proc_up = subprocess.run(
@@ -936,6 +950,9 @@ class RestoreEngine:
                             results["failed_packages"].append(t("restore_err_pkg_timeout", pm=pm, sec=timeout_sec))
                         except Exception as e:
                             results["failed_packages"].append(t("restore_err_pkg_error", pm=pm, error=str(e)))
+
+                if driver_plan is not None and driver_plan.module_packages:
+                    self._install_module_drivers(driver_plan, results, options.dry_run, apt_updated)
 
             # 4. Aşama: Sistem Durumu (dconf, crontab ve /etc referansları) Geri Yükleme
             state_src = self.source_dir / "system_state"
@@ -1048,6 +1065,172 @@ class RestoreEngine:
             return results
         finally:
             _save_transaction_log()
+
+    def _install_module_drivers(
+        self,
+        plan: "drivers.DriverPlan",
+        results: Dict[str, Any],
+        dry_run: bool,
+        apt_updated: bool
+    ) -> None:
+        """
+        Çekirdek modülü kuran sürücüleri (NVIDIA, Broadcom wl) ayrı bir adımda kurar:
+        engel varsa hiç kurmaz, kurulumdan sonra modülün açılacak çekirdekler için oluştuğunu doğrular,
+        oluşmadıysa yalnızca bu adımda gelen paketleri kaldırarak sistemi önceki haline döndürür.
+        Böylece açık kaynak sürücü devre dışı kalıp yerine çalışan bir sürücü gelmemesi (siyah ekran) önlenir.
+        """
+        pm = plan.package_manager
+        module_list = ", ".join(plan.module_packages)
+        kernels_str = ", ".join(plan.kernels)
+        report: Dict[str, Any] = {
+            "status": "",
+            "message": "",
+            "packages": [],
+            "kernels": list(plan.kernels),
+            "removed": [],
+            "manual_command": "",
+        }
+        results["driver_report"] = report
+
+        def _skip(reasons: List[str]) -> None:
+            msg = t("driver_status_skipped", pkgs=module_list, reasons=" ".join(reasons))
+            if plan.distro_tool:
+                msg = f"{msg} {t('driver_plan_distro_tool', tool=plan.distro_tool)}"
+            report["status"] = "skipped"
+            report["message"] = msg
+            logger.warning(msg)
+
+        def _mark_failed(reason: str) -> None:
+            for mod_pkg in plan.module_packages:
+                results["failed_packages"].append(f"{pm}:{mod_pkg} ({t('driver_failed_tag')})")
+            logger.warning(reason)
+
+        if plan.already_present:
+            report["status"] = "already_present"
+            report["message"] = t("driver_status_already", kernels=kernels_str)
+            return
+
+        if plan.blockers:
+            _skip(plan.blockers)
+            return
+
+        if not dry_run and not drivers.sudo_ready():
+            _skip([t("driver_block_sudo")])
+            return
+
+        # Paket listeleri güncel değilse depo denetiminden önce güncelle
+        if pm in ("apt", "apt-get") and not apt_updated and not dry_run:
+            self._notify("kurulum", t("restore_notify_apt_update"))
+            try:
+                subprocess.run(["sudo", "apt-get", "update"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+            except Exception as e:
+                logger.warning(t("restore_err_update_error", pm=pm, error=str(e)))
+
+        required = plan.module_packages + plan.header_packages
+        missing = [p for p in required if drivers.package_available(pm, p) is not True]
+        if missing:
+            _skip([t("driver_block_not_in_repo", pkgs=", ".join(missing))])
+            return
+        optional = [p for p in plan.optional_packages if drivers.package_available(pm, p) is True]
+
+        to_install = required + optional
+        cmd, desc = drivers.driver_install_command(pm, to_install)
+        if not cmd:
+            _skip([t("driver_block_family")])
+            return
+        report["packages"] = list(to_install)
+
+        if dry_run:
+            results["installed_packages"].append(f"[DRY-RUN] {desc}: {' '.join(cmd)}")
+            report["status"] = "dry_run"
+            report["message"] = t("driver_status_dry_run", kernels=kernels_str)
+            return
+
+        before = drivers.installed_package_set(pm)
+        if before is None:
+            _skip([t("driver_block_pkg_list")])
+            return
+
+        self._notify("sürücü", t("driver_notify_installing", pkgs=", ".join(to_install)))
+        install_error = ""
+        try:
+            proc = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                timeout=drivers.DRIVER_INSTALL_TIMEOUT
+            )
+            if proc.returncode != 0:
+                detail = (proc.stderr or proc.stdout or "").strip()
+                install_error = detail[-300:] if detail else t("restore_err_exit_code", code=proc.returncode)
+        except subprocess.TimeoutExpired:
+            install_error = t("driver_err_timeout", sec=drivers.DRIVER_INSTALL_TIMEOUT)
+        except Exception as e:
+            install_error = str(e)
+
+        # Fedora'da akmods modülü arka planda derler; doğrulamadan önce derlemeyi bekle
+        if not install_error and pm == "dnf" and shutil.which("akmods"):
+            self._notify("sürücü", t("driver_notify_building"))
+            for kver in plan.kernels:
+                try:
+                    subprocess.run(
+                        ["sudo", "akmods", "--force", "--kernels", kver],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                        timeout=drivers.DRIVER_INSTALL_TIMEOUT
+                    )
+                except Exception as e:
+                    logger.warning(str(e))
+
+        self._notify("sürücü", t("driver_notify_verifying"))
+        missing_kernels = [
+            k for k in plan.kernels
+            if not all(drivers.module_present(k, grp) for grp in plan.module_groups)
+        ]
+        if not install_error and not missing_kernels:
+            results["installed_packages"].extend(to_install)
+            report["status"] = "installed"
+            report["message"] = t("driver_status_installed", kernels=kernels_str)
+            return
+
+        if install_error:
+            reason = t("driver_reason_install_failed", error=install_error)
+        else:
+            reason = t("driver_reason_module_missing", kernels=", ".join(missing_kernels))
+        _mark_failed(reason)
+
+        after = drivers.installed_package_set(pm)
+        if after is None:
+            # Bu adımda neyin kurulduğu bilinemiyor: kaldırma komutu kullanıcıya gösterilir
+            manual = " ".join(drivers.removal_command(pm, to_install))
+            report["status"] = "rollback_failed"
+            report["manual_command"] = manual
+            report["message"] = t("driver_status_rollback_failed", reason=reason, cmd=manual)
+            logger.error(report["message"])
+            return
+
+        new_pkgs = sorted(after - before)
+        if not new_pkgs:
+            report["status"] = "failed"
+            report["message"] = t("driver_status_failed", reason=reason)
+            return
+
+        rm_cmd = drivers.removal_command(pm, new_pkgs)
+        self._notify("sürücü", t("driver_notify_removing", count=len(new_pkgs)))
+        rm_ok = False
+        try:
+            rm_proc = subprocess.run(rm_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600)
+            rm_ok = rm_proc.returncode == 0
+        except Exception as e:
+            logger.warning(str(e))
+
+        if rm_ok:
+            report["status"] = "rolled_back"
+            report["removed"] = new_pkgs
+            report["message"] = t("driver_status_rolled_back", reason=reason, count=len(new_pkgs))
+        else:
+            manual = " ".join(rm_cmd)
+            report["status"] = "rollback_failed"
+            report["manual_command"] = manual
+            report["message"] = t("driver_status_rollback_failed", reason=reason, cmd=manual)
+            logger.error(report["message"])
 
     def cleanup(self):
         """Geçici açılan dizini ve şifresi çözülmüş geçici dosyaları temizler."""

@@ -986,6 +986,174 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "tr": "İptal Et",
         "en": "Cancel"
     },
+    "driver_risk_title": {
+        "tr": "⚠️ Sürücü Kurulumu Açılışı Etkileyebilir",
+        "en": "⚠️ Driver Installation Can Affect Booting"
+    },
+    "btn_driver_install": {
+        "tr": "Sürücüleri Kur",
+        "en": "Install Drivers"
+    },
+    "btn_driver_skip": {
+        "tr": "Sürücüsüz Devam Et",
+        "en": "Continue Without Drivers"
+    },
+    "btn_driver_cancel": {
+        "tr": "İptal Et",
+        "en": "Cancel"
+    },
+    "restore_notify_cancelled_by_user": {
+        "tr": "Geri yükleme iptal edildi.",
+        "en": "Restore cancelled."
+    },
+    "driver_plan_packages": {
+        "tr": "Kurulacak paketler: {pkgs}",
+        "en": "Packages to install: {pkgs}"
+    },
+    "driver_plan_optional": {
+        "tr": "Depoda varsa ayrıca: {pkgs}",
+        "en": "Also, if available: {pkgs}"
+    },
+    "driver_plan_command": {
+        "tr": "Çalıştırılacak komut: {cmd}",
+        "en": "Command to run: {cmd}"
+    },
+    "driver_plan_kernels": {
+        "tr": "Sürücü modülünün oluşması gereken çekirdek(ler): {kernels}",
+        "en": "Kernel(s) the driver module must be built for: {kernels}"
+    },
+    "driver_plan_secure_boot": {
+        "tr": "Secure Boot durumu: {state}",
+        "en": "Secure Boot state: {state}"
+    },
+    "driver_sb_on": {
+        "tr": "açık",
+        "en": "enabled"
+    },
+    "driver_sb_off": {
+        "tr": "kapalı",
+        "en": "disabled"
+    },
+    "driver_sb_unknown": {
+        "tr": "belirlenemedi",
+        "en": "unknown"
+    },
+    "driver_plan_risk": {
+        "tr": "Bu sürücü kurulunca açık kaynak sürücü (NVIDIA için nouveau) devre dışı kalır. Sürücü modülü açılacak çekirdek için oluşmazsa bilgisayar siyah ekranla açılabilir. DistroNomad kurulumdan sonra modülü doğrular; modül oluşmadıysa bu adımda kurulan paketleri kaldırır ve sistem açık kaynak sürücüyle açılır.",
+        "en": "Installing this driver disables the open-source driver (nouveau for NVIDIA). If the driver module is not built for the kernel that boots next, the computer may boot to a black screen. DistroNomad verifies the module after installation; if it is missing, the packages installed in this step are removed and the system boots with the open-source driver."
+    },
+    "driver_plan_distro_tool": {
+        "tr": "Bu sistemde dağıtımın kendi sürücü aracı var ({tool}); sürücüyü onunla kurmanız daha güvenlidir.",
+        "en": "This system has the distribution's own driver tool ({tool}); installing the driver with it is safer."
+    },
+    "driver_plan_blocked": {
+        "tr": "Çekirdek modülü gerektiren sürücüler kurulmayacak ({pkgs}):",
+        "en": "Drivers that need a kernel module will not be installed ({pkgs}):"
+    },
+    "driver_block_secure_boot": {
+        "tr": "Secure Boot açık ve çekirdek imzasız modülleri reddediyor; yerelde derlenen sürücü modülü yüklenemez. Secure Boot'u kapatın ya da sürücüyü dağıtımın belgelerine göre kurup modül imzalama anahtarını (MOK) kaydedin.",
+        "en": "Secure Boot is enabled and the kernel rejects unsigned modules, so a locally built driver module cannot be loaded. Disable Secure Boot, or install the driver following your distribution's documentation and enroll the module signing key (MOK)."
+    },
+    "driver_block_secure_boot_unknown": {
+        "tr": "Secure Boot durumu belirlenemedi; yerelde derlenen sürücü modülünün yüklenebileceğinden emin olunamıyor.",
+        "en": "The Secure Boot state could not be determined, so it is not certain that a locally built driver module can be loaded."
+    },
+    "driver_block_headers_unknown": {
+        "tr": "{kernel} çekirdeğinin başlık paketi belirlenemedi.",
+        "en": "Could not determine the header package for kernel {kernel}."
+    },
+    "driver_block_not_in_repo": {
+        "tr": "Depoda bulunamayan paketler: {pkgs}. Gerekli depo bileşenini etkinleştirin (Debian/Pardus: non-free, Fedora: RPM Fusion). Eksik olan çekirdek başlık paketiyse sistemi güncelleyip yeni çekirdekle yeniden başlatın, sonra tekrar deneyin.",
+        "en": "Packages not found in the repositories: {pkgs}. Enable the required repository component (Debian/Pardus: non-free, Fedora: RPM Fusion). If a kernel header package is missing, update the system, reboot into the new kernel and try again."
+    },
+    "driver_block_family": {
+        "tr": "Bu dağıtımda denetimli sürücü kurulumu desteklenmiyor.",
+        "en": "Checked driver installation is not supported on this distribution."
+    },
+    "driver_block_pkg_list": {
+        "tr": "Kurulu paket listesi okunamadı; kurulum başarısız olursa geri alınamaz.",
+        "en": "The installed package list could not be read, so a failed installation could not be undone."
+    },
+    "driver_block_sudo": {
+        "tr": "Yönetici (sudo) yetkisi alınamadı.",
+        "en": "Administrator (sudo) privileges could not be obtained."
+    },
+    "driver_status_skipped": {
+        "tr": "Çekirdek modülü gerektiren sürücüler kurulmadı ({pkgs}). {reasons}",
+        "en": "Drivers that need a kernel module were not installed ({pkgs}). {reasons}"
+    },
+    "driver_status_already": {
+        "tr": "Sürücü modülü şu çekirdek(ler) için zaten kurulu: {kernels}. Sürücü paketlerine dokunulmadı.",
+        "en": "The driver module is already installed for kernel(s): {kernels}. Driver packages were left untouched."
+    },
+    "driver_status_installed": {
+        "tr": "Sürücü modülü doğrulandı ({kernels}). Sürücünün etkinleşmesi için bilgisayarı yeniden başlatın.",
+        "en": "Driver module verified ({kernels}). Restart the computer to activate the driver."
+    },
+    "driver_status_dry_run": {
+        "tr": "Kurulumdan sonra sürücü modülü şu çekirdek(ler) için doğrulanacak: {kernels}. Modül oluşmazsa bu adımda kurulan paketler kaldırılacak.",
+        "en": "After installation the driver module will be verified for kernel(s): {kernels}. If it is missing, the packages installed in this step will be removed."
+    },
+    "driver_status_failed": {
+        "tr": "{reason} Sistemde değişiklik yapılmadı.",
+        "en": "{reason} No changes were made to the system."
+    },
+    "driver_status_rolled_back": {
+        "tr": "{reason} Açılışta siyah ekranı önlemek için bu adımda kurulan {count} paket kaldırıldı; sistem açık kaynak sürücüyle açılacak.",
+        "en": "{reason} To prevent a black screen at boot, the {count} packages installed in this step were removed; the system will boot with the open-source driver."
+    },
+    "driver_status_rollback_failed": {
+        "tr": "DİKKAT: {reason} Kurulan sürücü paketleri kaldırılamadı. Bilgisayarı yeniden başlatmadan önce şu komutu çalıştırın: {cmd}",
+        "en": "WARNING: {reason} The installed driver packages could not be removed. Before restarting the computer, run: {cmd}"
+    },
+    "driver_reason_module_missing": {
+        "tr": "Sürücü modülü şu çekirdek(ler) için oluşmadı: {kernels}.",
+        "en": "The driver module was not built for kernel(s): {kernels}."
+    },
+    "driver_reason_install_failed": {
+        "tr": "Sürücü kurulum komutu başarısız oldu ({error}).",
+        "en": "The driver installation command failed ({error})."
+    },
+    "driver_err_timeout": {
+        "tr": "{sec} saniyede tamamlanmadı",
+        "en": "did not finish within {sec} seconds"
+    },
+    "driver_failed_tag": {
+        "tr": "sürücü doğrulanamadı",
+        "en": "driver not verified"
+    },
+    "driver_notify_installing": {
+        "tr": "Sürücü paketleri kuruluyor; çekirdek modülünün derlenmesi birkaç dakika sürebilir: {pkgs}",
+        "en": "Installing driver packages; building the kernel module can take a few minutes: {pkgs}"
+    },
+    "driver_notify_building": {
+        "tr": "Sürücü modülü derleniyor (akmods)...",
+        "en": "Building the driver module (akmods)..."
+    },
+    "driver_notify_verifying": {
+        "tr": "Sürücü modülü doğrulanıyor...",
+        "en": "Verifying the driver module..."
+    },
+    "driver_notify_removing": {
+        "tr": "Sürücü doğrulanamadı; bu adımda kurulan {count} paket kaldırılıyor...",
+        "en": "Driver could not be verified; removing the {count} packages installed in this step..."
+    },
+    "restore_warn_driver_pkgs_from_backup": {
+        "tr": "Yedekteki {count} sürücü paketi kurulmadı ({pkgs}). Çekirdek sürücüsü paketleri yalnızca 'Donanım Sürücülerini Kur' seçeneğiyle (CLI: --install-drivers), bu bilgisayarın donanımına göre ve denetlenerek kurulur.",
+        "en": "{count} driver packages from the backup were not installed ({pkgs}). Kernel driver packages are only installed through the 'Install Hardware Drivers' option (CLI: --install-drivers), matched to this computer's hardware and checked."
+    },
+    "cli_drivers_confirm": {
+        "tr": "Sürücüler kurulsun mu? [e/H]: ",
+        "en": "Install the drivers? [y/N]: "
+    },
+    "cli_drivers_skipped_by_user": {
+        "tr": "Sürücü kurulumu atlandı; geri yüklemenin geri kalanı sürüyor.",
+        "en": "Driver installation skipped; continuing with the rest of the restore."
+    },
+    "cli_drivers_noninteractive": {
+        "tr": "Sürücü kurulumu onay ister; etkileşimli terminal olmadığı için atlandı.",
+        "en": "Driver installation needs confirmation; skipped because there is no interactive terminal."
+    },
     "err_efbig_fat32_limit": {
         "tr": "Dosya boyutu sınırı aşıldı (FAT32 tek dosya sınırı 4 GB). Yarım kalan çıktı temizlendi. USB belleğinizi exFAT veya ext4 olarak biçimlendirmeniz önerilir.",
         "en": "File size limit exceeded (FAT32 single file limit is 4 GB). Incomplete output cleaned up. Recommended to format USB drive as exFAT or ext4."
@@ -1503,8 +1671,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Restore system state (dconf, crontab, etc.) (default: off)"
     },
     "cli_opt_restore_install_drivers": {
-        "tr": "Canlı donanım taramasına göre önerilen sürücüleri kur (varsayılan: kapalı)",
-        "en": "Install recommended drivers based on live hardware scan (default: off)"
+        "tr": "Canlı donanım taramasına göre önerilen sürücüleri ön denetim ve doğrulamayla kur; çekirdek modülü kuranlar onay ister (varsayılan: kapalı)",
+        "en": "Install drivers recommended by the live hardware scan, with pre-checks and verification; drivers that add a kernel module ask for confirmation (default: off)"
     },
     "cli_opt_restore_password": {
         "tr": "Şifrelenmiş yedeği açmak için parola",

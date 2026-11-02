@@ -48,6 +48,7 @@ from distronomad.crypto import is_encrypted_file
 from distronomad.diff_utils import compare_backup_with_host
 from distronomad.automation import get_timer_status
 from distronomad.hardware import scan_hardware_profile, is_hardware_profile_different
+from distronomad.drivers import build_driver_plan, describe_driver_plan, resolve_driver_target
 from distronomad.packagemap import detect_distro_family
 from distronomad.ui.modal import (
     FilePickerModal,
@@ -57,8 +58,10 @@ from distronomad.ui.modal import (
     AutomationModal,
     Fat32WarningModal,
     BrowserRunningModal,
+    DriverRiskModal,
     ConfirmExitModal,
 )
+from rich.markup import escape
 from distronomad.i18n import (
     t,
     get_current_language,
@@ -2637,7 +2640,16 @@ class DistroNomadApp(App):
         except Exception:
             return False
 
-    def _handle_start_restore(self) -> None:
+    def _restore_driver_plan(self):
+        """Geri yüklemede kurulacak sürücülerin planını kurulum öncesi denetimlerle hesaplar (öneri yoksa None)."""
+        live_hw = scan_hardware_profile()
+        family, pm = resolve_driver_target(self.system_info)
+        recs = live_hw.recommended_packages.get(family, [])
+        if not recs or not pm:
+            return None
+        return build_driver_plan(recs, family, pm)
+
+    def _handle_start_restore(self, driver_decision: Optional[str] = None) -> None:
         if getattr(self, "_is_restoring", False):
             self.notify(t("restore_notify_already_restoring"), severity="warning")
             return
@@ -2673,13 +2685,33 @@ class DistroNomadApp(App):
             install_drivers = bool(chk_d.value and not chk_d.disabled)
         except Exception:
             pass
+        # Onay ekranında "Sürücüsüz Devam Et" seçildiyse sürücüler kurulmaz
+        if driver_decision == "skip":
+            install_drivers = False
 
         if not selected_pkgs and not selected_cfgs and not selected_custom and not install_drivers:
             self.notify(t("restore_notify_no_items_selected"), severity="error")
             return
 
-        # Paket kurulumu için sudo kontrolü ve App.suspend() parola akışı
-        if selected_pkgs:
+        dry_run = self.query_one("#chk-dry-run", Checkbox).value
+
+        # Çekirdek modülü kuran sürücüler (NVIDIA, Broadcom wl) kurulacaksa önce plan, komut ve riskler
+        # gösterilip açık onay alınır. Engel varsa ya da modül zaten kuruluysa kurulum denenmeyeceği için sorulmaz.
+        if install_drivers and driver_decision is None and not dry_run:
+            plan = self._restore_driver_plan()
+            if plan is not None and plan.module_packages and not plan.blockers and not plan.already_present:
+                def on_driver_choice(choice: Optional[str]) -> None:
+                    if choice in ("install", "skip"):
+                        self._handle_start_restore(driver_decision=choice)
+                    else:
+                        self.notify(t("restore_notify_cancelled_by_user"), severity="warning")
+
+                self.push_screen(DriverRiskModal(describe_driver_plan(plan)), on_driver_choice)
+                return
+
+        # Paket ve sürücü kurulumu için sudo kontrolü ve App.suspend() parola akışı
+        drivers_need_sudo = install_drivers and not dry_run
+        if selected_pkgs or drivers_need_sudo:
             can_sudo = self._check_sudo_passwordless()
             if not can_sudo:
                 sudo_ok = False
@@ -2700,6 +2732,8 @@ class DistroNomadApp(App):
                     except Exception:
                         pass
                     selected_pkgs = []
+                    if drivers_need_sudo:
+                        install_drivers = False
 
         conflict = "backup"
         if self.query_one("#conflict-overwrite", RadioButton).value:
@@ -2707,7 +2741,6 @@ class DistroNomadApp(App):
         elif self.query_one("#conflict-skip", RadioButton).value:
             conflict = "skip"
 
-        dry_run = self.query_one("#chk-dry-run", Checkbox).value
         restore_sys_state = self.query_one("#chk-restore-system-state", Checkbox).value
 
         allow_external = False
@@ -2806,7 +2839,23 @@ class DistroNomadApp(App):
             for sp in skipped_ext:
                 log.write(f"  [yellow]• {sp}[/yellow]")
 
+        driver_report = results.get("driver_report") or {}
+        driver_msg = driver_report.get("message", "")
+        driver_status = driver_report.get("status", "")
+        if driver_msg:
+            if driver_status == "installed":
+                style = "bold green"
+            elif driver_status in ("failed", "rolled_back", "rollback_failed"):
+                style = "bold red"
+            else:
+                style = "bold yellow"
+            log.write(f"[{style}]🖥 {escape(driver_msg)}[/{style}]")
+
         self.notify(t("restore_notify_success"))
+        if driver_status == "rollback_failed":
+            self.notify(driver_msg, severity="error", timeout=60)
+        elif driver_status in ("failed", "rolled_back"):
+            self.notify(driver_msg, severity="warning", timeout=20)
 
     def _handle_verify_backup(self) -> None:
         src_input = self.query_one("#input-restore-src", Input).value.strip()

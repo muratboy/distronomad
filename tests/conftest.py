@@ -5,9 +5,10 @@ R1 Kuralı:
 - Testlerin gerçek ev dizinine (~), ~/.config, systemctl --user, VS Code ayarları,
   npm ve diğer sistem araçlarına doğrudan dokunmasını engeller.
 - HOME ve XDG değişkenlerini her test için izole tmp_path altına yönlendirir.
-- systemctl, sudo, pkexec, pacman, yay, paru, apt, apt-get, dpkg, dnf, rpm, zypper,
-  flatpak, snap, npm, code, codium, dconf, gsettings gibi sistem komutlarını
+- systemctl, sudo, pkexec, pacman, yay, paru, apt, apt-get, dpkg, dpkg-query, dnf, rpm, zypper,
+  mokutil, akmods, flatpak, snap, npm, code, codium, dconf, gsettings gibi sistem komutlarını
   subprocess.run, Popen, check_output, check_call, call ve os.system yollarında engeller/sahteler.
+- Sürücü denetimlerini (çekirdek modülleri, Secure Boot, dağıtım araçları) sahte bir sisteme yönlendirir.
 - tar, openssl, zstd, bash gibi test araçlarını serbest bırakır.
 """
 
@@ -32,6 +33,9 @@ FAKED_SYSTEM_COMMANDS = {
     "apt-cache",
     "apt-mark",
     "dpkg",
+    "dpkg-query",
+    "mokutil",
+    "akmods",
     "dnf",
     "rpm",
     "zypper",
@@ -56,8 +60,17 @@ PACMAN_SP_VALID_PACKAGES: set[str] = {
 }
 
 
+def _skip_env_prefix(parts: list, idx: int) -> int:
+    """sudo sonrasındaki 'env' ve DEGISKEN=deger öneklerini atlayıp asıl komutun konumunu döndürür."""
+    if idx < len(parts) and os.path.basename(str(parts[idx])) == "env":
+        idx += 1
+    while idx < len(parts) and "=" in str(parts[idx]) and not str(parts[idx]).startswith("-"):
+        idx += 1
+    return idx
+
+
 def _extract_base_cmd(cmd: Any) -> str:
-    """Komut dizisi veya dizesinden kök çalıştırılabilir adını ayıklar (sudo/pkexec desteğiyle)."""
+    """Komut dizisi veya dizesinden kök çalıştırılabilir adını ayıklar (sudo/pkexec ve 'sudo env X=Y komut' desteğiyle)."""
     if isinstance(cmd, (list, tuple)):
         if not cmd:
             return ""
@@ -67,6 +80,7 @@ def _extract_base_cmd(cmd: Any) -> str:
             idx = 1
             while idx < len(cmd) and str(cmd[idx]).startswith("-"):
                 idx += 1
+            idx = _skip_env_prefix(list(cmd), idx)
             if idx < len(cmd):
                 return os.path.basename(str(cmd[idx]))
             return base
@@ -80,6 +94,7 @@ def _extract_base_cmd(cmd: Any) -> str:
             idx = 1
             while idx < len(parts) and parts[idx].startswith("-"):
                 idx += 1
+            idx = _skip_env_prefix(parts, idx)
             if idx < len(parts):
                 return os.path.basename(parts[idx])
             return base
@@ -145,6 +160,14 @@ def _get_fake_result(cmd: Any, **kwargs: Any) -> tuple[int, str, str]:
             stdout = "bash\tinstall\n"
         else:
             stdout = ""
+        returncode = 0
+    elif base_cmd == "dpkg-query":
+        stdout = "installed bash\n"
+        returncode = 0
+    elif base_cmd == "mokutil":
+        stdout = "SecureBoot disabled\n"
+        returncode = 0
+    elif base_cmd == "akmods":
         returncode = 0
     elif base_cmd == "dnf":
         if "repoquery" in cmd_str:
@@ -337,3 +360,20 @@ def isolate_test_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(subprocess, "check_call", fake_subprocess_check_call)
     monkeypatch.setattr(subprocess, "call", fake_subprocess_call)
     monkeypatch.setattr(os, "system", fake_os_system)
+
+    # Sürücü denetimleri ana makinenin çekirdeklerine, Secure Boot durumuna ve araçlarına bakmasın:
+    # her test, başlıkları kurulu ama sürücü modülü henüz olmayan sağlıklı sahte bir sisteme bakar
+    # (UEFI dizini yok: BIOS açılışı, Secure Boot kapalı). Testler bu yolları kendi senaryolarına göre değiştirebilir.
+    from distronomad import drivers
+    fake_host = tmp_path / "fake_driver_host"
+    kernel_dir = fake_host / "modules" / "6.0.0-test"
+    (kernel_dir / "build").mkdir(parents=True)
+    (kernel_dir / "vmlinuz").write_bytes(b"")
+    (kernel_dir / "pkgbase").write_text("linux\n", encoding="utf-8")
+    monkeypatch.setattr(drivers, "MODULES_DIR", fake_host / "modules")
+    monkeypatch.setattr(drivers, "BOOT_DIR", fake_host / "boot")
+    monkeypatch.setattr(drivers, "EFI_DIR", fake_host / "efi")
+    monkeypatch.setattr(drivers, "LOCKDOWN_FILE", fake_host / "lockdown")
+    monkeypatch.setattr(drivers, "SIG_ENFORCE_FILE", fake_host / "sig_enforce")
+    monkeypatch.setattr(drivers, "running_kernel", lambda: "6.0.0-test")
+    monkeypatch.setattr(drivers, "find_distro_driver_tool", lambda: "")

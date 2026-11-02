@@ -22,7 +22,9 @@ from distronomad.restore import RestoreEngine, rollback_restore
 from distronomad.diff_utils import compare_backup_with_host, compute_file_diff
 from distronomad.automation import get_timer_status, enable_timer, disable_timer
 from distronomad.hardware import scan_hardware_profile, is_hardware_profile_different
+from distronomad.drivers import build_driver_plan, describe_driver_plan, resolve_driver_target
 from distronomad.crypto import is_encrypted_file
+from rich.markup import escape
 from distronomad.i18n import (
     t,
     get_current_language,
@@ -525,6 +527,21 @@ def cmd_append(args):
         sys.exit(1)
 
 
+def _confirm_driver_install() -> bool:
+    """Çekirdek modülü kuran sürücüler için açık onay ister; etkileşimli terminal yoksa kurulmaz."""
+    if not sys.stdin.isatty():
+        console.print(f"[yellow]{t('cli_drivers_noninteractive')}[/yellow]")
+        return False
+    try:
+        answer = input(t("cli_drivers_confirm"))
+    except (EOFError, KeyboardInterrupt):
+        answer = ""
+    if answer.strip().lower() in ("e", "evet", "y", "yes"):
+        return True
+    console.print(f"[yellow]{t('cli_drivers_skipped_by_user')}[/yellow]")
+    return False
+
+
 def cmd_restore(args):
     """Komut satırından yedek geri yükler."""
     if getattr(args, "lang", None):
@@ -557,11 +574,18 @@ def cmd_restore(args):
             live_hw = scan_hardware_profile()
             scanner = SystemScanner(home_dir=args.target_home)
             current_sys = scanner.scan_system_info()
-            from distronomad.packagemap import detect_distro_family
-            target_fam = detect_distro_family(current_sys.distro_id, current_sys.distro_like)
+            target_fam, driver_pm = resolve_driver_target(current_sys)
             recs = live_hw.recommended_packages.get(target_fam, [])
             recs_str = ", ".join(recs) if recs else t("hw_rec_none")
             console.print(f"[cyan]🖥 {t('chk_install_drivers_lbl')}:[/cyan] {recs_str}")
+            if recs and driver_pm:
+                plan = build_driver_plan(recs, target_fam, driver_pm)
+                if plan.module_packages:
+                    for line in describe_driver_plan(plan):
+                        console.print(f"  [yellow]{escape(line)}[/yellow]")
+                    # Kurulum gerçekten denenecekse (engel yok, modül kurulu değil) açık onay istenir
+                    if not args.dry_run and not plan.blockers and not plan.already_present:
+                        install_drivers = _confirm_driver_install()
 
         allow_ext = getattr(args, "allow_external_paths", False)
         options = RestoreOptions(
@@ -604,6 +628,19 @@ def cmd_restore(args):
             console.print(f"  • [bold yellow]{t('cli_restore_skipped_external_paths', count=len(results['skipped_external_paths']))}[/bold yellow]")
             for ep in results["skipped_external_paths"]:
                 console.print(f"    [yellow]- {ep}[/yellow]")
+        if results.get("skipped_driver_packages"):
+            skipped_drv = results["skipped_driver_packages"]
+            console.print(f"  • [bold yellow]{escape(t('restore_warn_driver_pkgs_from_backup', count=len(skipped_drv), pkgs=', '.join(skipped_drv)))}[/bold yellow]")
+        driver_report = results.get("driver_report") or {}
+        if driver_report.get("message"):
+            drv_status = driver_report.get("status")
+            if drv_status == "installed":
+                color = "green"
+            elif drv_status in ("failed", "rolled_back", "rollback_failed"):
+                color = "red"
+            else:
+                color = "yellow"
+            console.print(f"[bold {color}]🖥 {escape(driver_report['message'])}[/bold {color}]")
         if results.get("transaction_file"):
             console.print(f"  • [cyan]{t('cli_restore_tx_log')}[/cyan] {results['transaction_file']}")
 

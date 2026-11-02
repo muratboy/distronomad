@@ -546,6 +546,13 @@ install_packages() {
                     log_warn "Geçersiz karakter içeren paket adı atlandı: $p" "Package name with invalid characters skipped: $p"
                     continue
                 fi
+                # Çekirdek sürücüsü paketleri (NVIDIA, Broadcom wl) açık kaynak sürücüyü kapatır; modül bu
+                # sistemin çekirdeği için derlenemezse açılışta siyah ekran olur. Bu yüzden otomatik kurulmaz.
+                local p_lower="${p,,}"
+                if [[ "$p_lower" == *nvidia* || "$p_lower" == broadcom-wl* || "$p_lower" == broadcom-sta* ]]; then
+                    log_warn "Sürücü paketi otomatik kurulmadı, dağıtımın kendi aracıyla kurun: $p" "Driver package not installed automatically, install it with your distribution's tools: $p"
+                    continue
+                fi
                 valid_pkgs+=("$p")
             done
 

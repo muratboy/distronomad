@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Hardware drivers that add a kernel module and disable the open-source driver (NVIDIA, Broadcom `wl`) are installed in a separate, checked step. The step is skipped when Secure Boot or kernel lockdown would reject an unsigned module, when the header package of the running or newest kernel cannot be determined, or when a package is missing from the repositories. Header packages for those kernels are installed with the driver.
+- After installation the driver module is verified for the running and newest kernel. If it is missing, only the packages installed in that step are removed, so the system boots with the open-source driver instead of a black screen. If removal fails, the exact command to run before rebooting is shown.
+- Before installing such a driver, the TUI and CLI show the packages, the command, the kernels, the Secure Boot state and the risks, and ask for confirmation. Without an interactive terminal the CLI skips the driver step.
+- NVIDIA and Broadcom `wl` packages from the backup's package list are no longer installed directly, in the app or in `restore.sh`. Drivers come only from the live hardware scan through the checked step.
+- On Debian-based systems, drivers are installed with `DEBIAN_FRONTEND=noninteractive` so a debconf prompt cannot stall the installation.
+
+### Fixed
+- `verify` no longer mistakes nested `manifest.json` files (browser extensions, Widevine) for the backup manifest.
+- Tar archives hash each file from the same read that writes it. Files that change during the backup are listed, a file that shrinks no longer corrupts the archive, and hard links are stored as regular files.
+- Backups warn (the TUI asks) when a browser or mail client whose profile is selected is running.
+- In the TUI, a restore that only installs drivers now asks for sudo first and skips the drivers if authentication fails.
+
 ## [0.9.0] - 2026-11-01
 
 ### Added
@@ -23,4 +38,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified diff viewer and transaction rollback engine (`distronomad rollback`).
 - Dual language support (Turkish and English) across TUI, CLI, and standalone restore script, with `--lang` flag and environment auto-detection.
 
+[Unreleased]: https://github.com/muratboy/distronomad/compare/v0.9.0...HEAD
 [0.9.0]: https://github.com/muratboy/distronomad/releases/tag/v0.9.0

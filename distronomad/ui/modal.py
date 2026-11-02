@@ -22,7 +22,7 @@ from textual.widgets import (
     OptionList,
 )
 from textual.widgets.option_list import Option
-from textual.containers import Vertical, Horizontal
+from textual.containers import Vertical, Horizontal, VerticalScroll
 
 from distronomad import automation
 from distronomad.automation import get_timer_status
@@ -406,6 +406,35 @@ class BrowserRunningModal(ModalScreen[bool]):
             self.dismiss(True)
         else:
             self.dismiss(False)
+
+
+class DriverRiskModal(ModalScreen[Optional[str]]):
+    """Çekirdek modülü kuran sürücüler için plan, risk açıklaması ve onay modalı.
+    Sonuç: "install" (kur), "skip" (sürücüsüz devam et) ya da None (iptal)."""
+
+    def __init__(self, lines: List[str]):
+        super().__init__()
+        self.lines = lines
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="driver-dialog"):
+            yield Label(t("driver_risk_title"), id="driver-title")
+            # Küçük terminallerde düğmeler görünür kalsın diye açıklama kaydırılabilir alanda;
+            # paket adları ve komut Rich biçimlendirmesi olarak yorumlanmasın
+            with VerticalScroll(id="driver-desc-scroll"):
+                yield Label("\n".join(self.lines), id="driver-desc", markup=False)
+            with Horizontal(id="driver-buttons"):
+                yield Button(t("btn_driver_install"), id="btn-driver-install", classes="btn-danger")
+                yield Button(t("btn_driver_skip"), id="btn-driver-skip", classes="btn-primary")
+                yield Button(t("btn_driver_cancel"), id="btn-driver-cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-driver-install":
+            self.dismiss("install")
+        elif event.button.id == "btn-driver-skip":
+            self.dismiss("skip")
+        else:
+            self.dismiss(None)
 
 
 class ConfirmExitModal(ModalScreen[bool]):
