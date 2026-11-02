@@ -181,6 +181,7 @@ class BackupManifest:
     system_state_info: Dict[str, Any] = field(default_factory=dict) # dconf, crontab, gruplar, udev/fstab referansları
     deleted_files: List[str] = field(default_factory=list) # Artımlı yedekte silinen dosyalar
     skipped_files: List[Dict[str, str]] = field(default_factory=list) # Okunamayan veya atlanan dosyalar [{"path": ..., "reason": ...}]
+    changed_during_backup: List[str] = field(default_factory=list) # Ön taramadan sonra değişen / kısalan dosyalar (arşivdeki anlık hâlleri doğrulanır)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -238,7 +239,8 @@ class BackupManifest:
             hardware_info=data.get("hardware_info", {}),
             system_state_info=data.get("system_state_info", {}),
             deleted_files=data.get("deleted_files", []),
-            skipped_files=data.get("skipped_files", [])
+            skipped_files=data.get("skipped_files", []),
+            changed_during_backup=data.get("changed_during_backup", [])
         )
 
 

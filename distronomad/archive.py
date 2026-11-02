@@ -357,7 +357,8 @@ def read_manifest_from_backup(
             with tarfile.open(fileobj=decomp_stream, mode="r|*") as tar:
                 for member in tar:
                     norm_name = member.name.replace("\\", "/").lstrip("./").lstrip("/")
-                    # Yalnızca kökteki manifest yedeğe aittir (yedeklenen uygulamaların kendi manifest.json'ları değil)
+                    # Yalnızca kökteki manifest yedeğe aittir (yedeklenen uygulamaların kendi manifest.json'ları değil).
+                    # Arşivin başındaki bu manifest hızlı inceleme içindir; tüm arşivi okumamak için ilk eşleşmede durulur.
                     if norm_name == "manifest.json":
                         f = tar.extractfile(member)
                         if f:

@@ -340,6 +340,40 @@ def compute_sha256(file_path: Path) -> str:
         return ""
 
 
+class _HashingReader:
+    """tarfile.addfile'ın arşive yazdığı baytların SHA-256 özetini tutan okuyucu.
+    Dosya okunurken kısalırsa (ör. SQLite -wal dosyasının sıfırlanması) GNU tar gibi eksik kısmı sıfırla doldurur;
+    aksi hâlde başlıktaki boyut tutmaz ve tar akışının geri kalanı okunamaz hâle gelir."""
+
+    def __init__(self, fobj):
+        self._fobj = fobj
+        self.hasher = hashlib.sha256()
+        self.shrank = False
+
+    def read(self, size: int = -1) -> bytes:
+        data = self._fobj.read(size)
+        if size is not None and size > 0 and len(data) < size:
+            self.shrank = True
+            data += b"\0" * (size - len(data))
+        self.hasher.update(data)
+        return data
+
+
+def add_file_with_hash(tar_obj: tarfile.TarFile, src: Path, arcname: str) -> Tuple[str, bool]:
+    """Normal bir dosyayı tek okumada arşive ekler; (arşive yazılan baytların SHA-256 özeti, dosya kısaldı mı) döndürür.
+    Sabit bağlantılı (hard link) dosyalar da içerikleriyle normal dosya olarak yazılır; böylece her girdi
+    kendi içeriğini taşır ve doğrulanabilir."""
+    with open(src, "rb") as f_in:
+        tarinfo = tar_obj.gettarinfo(arcname=arcname, fileobj=f_in)
+        if tarinfo.islnk():
+            tarinfo.type = tarfile.REGTYPE
+            tarinfo.linkname = ""
+            tarinfo.size = os.fstat(f_in.fileno()).st_size
+        reader = _HashingReader(f_in)
+        tar_obj.addfile(tarinfo, reader)
+    return reader.hasher.hexdigest(), reader.shrank
+
+
 def safe_copytree(src: Path, dst: Path, symlinks: bool = True, dirs_exist_ok: bool = True) -> None:
     """Mevcut symlink veya dosyaların üzerine güvenle yazabilen copytree alternatifi."""
     src_p = Path(src)
@@ -1416,42 +1450,50 @@ class BackupEngine:
             os.chmod(restore_script_path, os.stat(restore_script_path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
             # 4. Aşama: manifest.json
-            if self.backup_mode == "incremental":
-                merged_meta = dict(chain_metadata)
-                merged_meta.update(self.file_metadata)
-                merged_hashes = dict(chain_hashes)
-                merged_hashes.update(self.file_hashes)
-                for del_key in deleted_files:
-                    merged_meta.pop(del_key, None)
-                    merged_hashes.pop(del_key, None)
-            else:
-                merged_meta = self.file_metadata
-                merged_hashes = self.file_hashes
+            # Arşivin başına ön tarama hash'leriyle hızlı inceleme manifesti yazılır; akış bitince arşive yazılan
+            # baytların hash'leriyle kesin manifest arşivin sonuna eklenir (doğrulama ve geri yükleme sondakini kullanır).
+            created_at = datetime.now().isoformat()
 
-            merged_hashes = {k: v for k, v in merged_hashes.items() if v}
+            def _write_manifest(changed_during_backup: List[str]) -> None:
+                if self.backup_mode == "incremental":
+                    merged_meta = dict(chain_metadata)
+                    merged_meta.update(self.file_metadata)
+                    merged_hashes = dict(chain_hashes)
+                    merged_hashes.update(self.file_hashes)
+                    for del_key in deleted_files:
+                        merged_meta.pop(del_key, None)
+                        merged_hashes.pop(del_key, None)
+                else:
+                    merged_meta = self.file_metadata
+                    merged_hashes = self.file_hashes
 
-            manifest = BackupManifest(
-                created_at=datetime.now().isoformat(),
-                version="1.0.0",
-                system_info=self.system_info,
-                packages=self.packages,
-                configs=self.configs,
-                custom_paths=self.custom_paths,
-                archive_format=self.archive_format,
-                total_bytes=copied_bytes,
-                file_hashes=merged_hashes,
-                backup_type=self.backup_mode,
-                base_backup_name=self.base_backup_path.name if self.base_backup_path else "",
-                base_backup_created_at=base_manifest.created_at if base_manifest else "",
-                file_metadata=merged_meta,
-                incremental_stats=self.incremental_stats,
-                hardware_info=hw_info,
-                system_state_info=sys_state_info,
-                deleted_files=deleted_files,
-                skipped_files=self.skipped_files
-            )
-            with open(meta_staging_dir / "manifest.json", "w", encoding="utf-8") as f:
-                json.dump(manifest.to_dict(), f, indent=2, ensure_ascii=True)
+                merged_hashes = {k: v for k, v in merged_hashes.items() if v}
+
+                manifest = BackupManifest(
+                    created_at=created_at,
+                    version="1.0.0",
+                    system_info=self.system_info,
+                    packages=self.packages,
+                    configs=self.configs,
+                    custom_paths=self.custom_paths,
+                    archive_format=self.archive_format,
+                    total_bytes=copied_bytes,
+                    file_hashes=merged_hashes,
+                    backup_type=self.backup_mode,
+                    base_backup_name=self.base_backup_path.name if self.base_backup_path else "",
+                    base_backup_created_at=base_manifest.created_at if base_manifest else "",
+                    file_metadata=merged_meta,
+                    incremental_stats=self.incremental_stats,
+                    hardware_info=hw_info,
+                    system_state_info=sys_state_info,
+                    deleted_files=deleted_files,
+                    skipped_files=self.skipped_files,
+                    changed_during_backup=changed_during_backup
+                )
+                with open(meta_staging_dir / "manifest.json", "w", encoding="utf-8") as f:
+                    json.dump(manifest.to_dict(), f, indent=2, ensure_ascii=True)
+
+            _write_manifest([])
 
             # 5. Aşama: Arşive doğrudan akıt (Streaming tar.add)
             self._notify("sıkıştırma", t("backup_notify_packing_archive", format=self.archive_format), total_count=total_items, processed_count=0)
@@ -1471,6 +1513,7 @@ class BackupEngine:
                 if sys_d.exists():
                     tar_obj.add(sys_d, arcname="system_state")
 
+                changed_during_backup: List[str] = []
                 skipped_paths = {sf["path"] for sf in self.skipped_files}
                 for idx, item in enumerate(items_to_copy, 1):
                     src = item["src"]
@@ -1485,14 +1528,26 @@ class BackupEngine:
                     except (OSError, PermissionError, FileNotFoundError):
                         continue
                     self._notify("kopyalama", t("backup_notify_adding_to_archive", idx=idx, total=len(items_to_copy), dest=str(item['dest_rel'])), current_item=item['name'], processed_count=idx, total_count=len(items_to_copy))
+                    arcname = str(item["dest_rel"]).replace("\\", "/")
                     try:
-                        tar_obj.add(src, arcname=str(item["dest_rel"]).replace("\\", "/"), recursive=False)
+                        if src.is_file() and not src.is_symlink():
+                            # Hash, arşive yazılan baytlardan aynı okumada alınır; dosya ön taramadan sonra
+                            # değiştiyse (ör. açık tarayıcının veritabanı) arşivdeki anlık hâli kayda geçer.
+                            streamed_hash, shrank = add_file_with_hash(tar_obj, src, arcname)
+                            if shrank or self.file_hashes.get(item["rel_key"]) != streamed_hash:
+                                changed_during_backup.append(arcname)
+                            self.file_hashes[item["rel_key"]] = streamed_hash
+                            self.file_hashes[arcname] = streamed_hash
+                            if item["rel_key"] in self.file_metadata:
+                                self.file_metadata[item["rel_key"]]["sha256"] = streamed_hash
+                        else:
+                            tar_obj.add(src, arcname=arcname, recursive=False)
                     except (OSError, PermissionError, FileNotFoundError) as e:
                         if getattr(e, "errno", None) == errno.EFBIG or "File too large" in str(e):
                             raise
                         logger.warning(t("backup_warn_archive_add_failed", path=str(src), error=str(e)))
                         self.file_hashes.pop(item["rel_key"], None)
-                        self.file_hashes.pop(str(item["dest_rel"]).replace("\\", "/"), None)
+                        self.file_hashes.pop(arcname, None)
                         self.file_metadata.pop(item["rel_key"], None)
                         if not any(sf["path"] == str(src) for sf in self.skipped_files):
                             self.skipped_files.append({"path": str(src), "reason": str(e)})
@@ -1505,6 +1560,15 @@ class BackupEngine:
                         if getattr(e, "errno", None) == errno.EFBIG or "File too large" in str(e):
                             raise
                         logger.warning(t("backup_warn_empty_dir_add_failed", path=str(dir_src), error=str(e)))
+
+                if changed_during_backup:
+                    warn_msg = t("backup_warn_changed_during_backup", count=len(changed_during_backup), examples=", ".join(changed_during_backup[:3]))
+                    logger.warning(warn_msg)
+                    self._notify("uyarı", warn_msg)
+
+                # Kesin manifest arşivin sonuna; açılırken baştakinin üzerine yazılır ve doğrulama sondakini kullanır
+                _write_manifest(changed_during_backup)
+                tar_obj.add(meta_staging_dir / "manifest.json", arcname="manifest.json")
 
             raw_fd = os.open(temp_raw_archive, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
             if self.archive_format == "tar.zst":

@@ -127,6 +127,13 @@ def verify_backup(
             if isinstance(sf, dict):
                 res.skipped.append((sf.get("path", ""), sf.get("reason", t("verify_skipped_default"))))
 
+    if getattr(manifest, "changed_during_backup", None):
+        res.warnings.append(t(
+            "verify_warn_changed_during_backup",
+            count=len(manifest.changed_during_backup),
+            examples=", ".join(manifest.changed_during_backup[:3])
+        ))
+
     # Zincir kontrolü koşulu: Artımlı yedekte zincir kontrolü açıkken zincir doğrulanmış olmalı
     chain_ok = True
     if manifest.backup_type == "incremental" and check_chain:
@@ -294,6 +301,7 @@ def _verify_archive_file(
                         norm_name = _norm_path(member.name)
                         # Yalnızca kökteki manifest yedeğe aittir; tarayıcı eklentileri gibi uygulamaların
                         # kendi manifest.json dosyaları sıradan yedek dosyasıdır ve hash'leri doğrulanır.
+                        # Arşiv sonundaki kesin manifest (arşive yazılan baytların hash'leri) baştakinin yerini alır.
                         if norm_name == "manifest.json":
                             f = tar.extractfile(member)
                             if f:

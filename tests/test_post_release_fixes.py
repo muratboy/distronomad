@@ -7,22 +7,27 @@ Kapsam:
 2. Manifest okuyucu: Yalnızca kökteki manifest.json kabul edilir; kök manifest yoksa iç içe olan kullanılmaz.
 3. Açık tarayıcı uyarısı: Profili yedeğe seçili ve açık olan tarayıcılar algılanır; TUI başlamadan onay sorar,
    CLI uyarı yazar.
+4. Arşiv tutarlılığı: SHA-256 arşive yazılan baytlardan aynı okumada alınır ve kesin manifest arşivin sonuna eklenir;
+   yedekleme sırasında değişen, kısalan veya sabit bağlantılı dosyalar arşivi ya da doğrulamayı bozmaz.
 """
 
 from __future__ import annotations
 import io
 import json
+import os
 import subprocess
 import tarfile
 from pathlib import Path
 import pytest
+import zstandard as zstd
 
 from distronomad import cli, discovery
 from distronomad.archive import read_manifest_from_backup
 from distronomad.backup import BackupEngine
 from distronomad.discovery import find_running_browsers
 from distronomad.i18n import t
-from distronomad.models import ConfigItem, SystemInfo
+from distronomad.models import ConfigItem, RestoreOptions, SystemInfo
+from distronomad.restore import RestoreEngine
 from distronomad.verify import verify_backup
 
 
@@ -233,3 +238,105 @@ async def test_tui_asks_before_backup_when_browser_running(tmp_path, monkeypatch
 
         assert not isinstance(app.screen, BrowserRunningModal)
         assert bool(started) is should_start
+
+
+# ============================================================================
+# 4. ARŞİV TUTARLILIĞI: TEK OKUMADA HASH VE KESİN MANİFEST
+# ============================================================================
+
+def _dir_config(home: Path, rel: str) -> list:
+    return [ConfigItem(id=f"cfg_{rel}", name=rel, category="Test", source_path=str(home / rel), rel_path=rel, is_directory=True, is_selected=True)]
+
+
+def _archive_members(archive: Path) -> list:
+    with open(archive, "rb") as f_in, zstd.ZstdDecompressor().stream_reader(f_in) as reader:
+        with tarfile.open(fileobj=reader, mode="r|*") as tar:
+            return [(m.name, m.type) for m in tar]
+
+
+def test_file_changed_after_hashing_is_archived_consistently(tmp_path, monkeypatch):
+    """Ön taramadan sonra değişen dosya (açık tarayıcının veritabanı gibi) arşivle tutarlı kaydedilmeli;
+    doğrulama sağlam demeli ve dosyayı uyarıda göstermelidir."""
+    home = tmp_path / "src_home"
+    profile = home / ".mozilla/firefox/abcd.default-release"
+    _write(profile / "places.sqlite", "v1 - ön tarama\n")
+    _write(profile / "prefs.js", 'user_pref("a", 1);\n')
+    orig_notify = BackupEngine._notify
+
+    def notify_and_write(self, phase, message, *args, **kwargs):
+        # Ön tarama ve baştaki manifest bitti; akış başlamadan tarayıcı dosyaya yazıyor
+        if phase == "sıkıştırma":
+            (profile / "places.sqlite").write_text("v2 - yedekleme sırasında yazıldı\n", encoding="utf-8")
+        return orig_notify(self, phase, message, *args, **kwargs)
+
+    monkeypatch.setattr(BackupEngine, "_notify", notify_and_write)
+    archive = BackupEngine(
+        SystemInfo(distro_id="arch", home_dir=str(home)), [], _dir_config(home, ".mozilla/firefox"), [],
+        tmp_path / "ff.tar.zst", etc_dir=_empty_etc(tmp_path)
+    ).run()
+
+    res = verify_backup(archive)
+
+    assert res.is_valid, (res.mismatched, res.missing, res.untracked)
+    assert any("places.sqlite" in w for w in res.warnings)
+    names = [name for name, _ in _archive_members(archive)]
+    assert names[0] == "manifest.json" and names[-1] == "manifest.json", "Başta inceleme, sonda kesin manifest olmalıdır."
+
+    target = tmp_path / "target"
+    engine = RestoreEngine(backup_path=archive)
+    try:
+        manifest = engine.load_manifest(extract_files=True)
+        options = RestoreOptions(target_home=str(target), selected_configs=manifest.configs, install_packages=False, restore_system_state=False)
+        engine.execute_restore(options, target_system_info=SystemInfo(distro_id="arch", home_dir=str(target)))
+    finally:
+        engine.cleanup()
+    restored = target / ".mozilla/firefox/abcd.default-release/places.sqlite"
+    assert restored.read_text(encoding="utf-8") == "v2 - yedekleme sırasında yazıldı\n"
+
+
+def test_file_shrinking_while_archived_keeps_archive_readable(tmp_path, monkeypatch):
+    """Arşive eklenirken kısalan dosya (ör. sıfırlanan bir -wal dosyası) arşivin geri kalanını bozmamalıdır."""
+    home = tmp_path / "src_home"
+    app_dir = home / ".config/app"
+    shrinking = _write(app_dir / "history.sqlite-wal", "w" * 200000)
+    for i in range(5):
+        _write(app_dir / f"settings_{i}.conf", f"ayar {i}\n")
+    orig_gettarinfo = tarfile.TarFile.gettarinfo
+
+    def gettarinfo_then_shrink(self, name=None, arcname=None, fileobj=None):
+        tarinfo = orig_gettarinfo(self, name, arcname, fileobj)
+        if arcname and arcname.endswith("history.sqlite-wal"):
+            os.truncate(shrinking, 1000)  # boyut başlığa yazıldıktan sonra uygulama dosyayı sıfırlıyor
+        return tarinfo
+
+    monkeypatch.setattr(tarfile.TarFile, "gettarinfo", gettarinfo_then_shrink)
+    archive = BackupEngine(
+        SystemInfo(distro_id="arch", home_dir=str(home)), [], _dir_config(home, ".config/app"), [],
+        tmp_path / "wal.tar.zst", etc_dir=_empty_etc(tmp_path)
+    ).run()
+
+    res = verify_backup(archive)
+
+    assert res.is_valid and not res.corrupted, (res.error_message, res.mismatched, res.missing)
+    for i in range(5):
+        assert f"configs/.config/app/settings_{i}.conf" in res.matched
+    assert any("history.sqlite-wal" in w for w in res.warnings)
+
+
+def test_hard_linked_files_are_archived_with_content(tmp_path):
+    """Sabit bağlantılı dosyalar içerik taşıyan normal girdi olarak yazılmalı ve doğrulanmalıdır."""
+    home = tmp_path / "src_home"
+    app_dir = home / ".config/app"
+    first = _write(app_dir / "a.txt", "ortak içerik\n")
+    os.link(first, app_dir / "b.txt")
+    archive = BackupEngine(
+        SystemInfo(distro_id="arch", home_dir=str(home)), [], _dir_config(home, ".config/app"), [],
+        tmp_path / "links.tar.zst", etc_dir=_empty_etc(tmp_path)
+    ).run()
+
+    res = verify_backup(archive)
+
+    assert res.is_valid, (res.missing, res.untracked)
+    assert {"configs/.config/app/a.txt", "configs/.config/app/b.txt"} <= set(res.matched)
+    types = {name: kind for name, kind in _archive_members(archive) if name.endswith((".config/app/a.txt", ".config/app/b.txt"))}
+    assert set(types.values()) == {tarfile.REGTYPE}

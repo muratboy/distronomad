@@ -1977,6 +1977,10 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "tr": "Taban yedek bulunamadı: '{base}'. Zincir eksik; taban katmandaki dosyaların bütünlüğü doğrulanamadı.",
         "en": "Base backup not found: '{base}'. Chain is missing; integrity of files in base layer could not be verified."
     },
+    "verify_warn_changed_during_backup": {
+        "tr": "{count} dosya yedekleme sırasında değişmişti; arşivdeki hâlleri sağlam, ancak açık bir uygulamaya aitlerse kendi aralarında tutarsız olabilirler (ör. {examples}).",
+        "en": "{count} file(s) changed during the backup; their archived content is intact, but it may be inconsistent if they belong to a running application (e.g. {examples})."
+    },
     "verify_err_chain_missing": {
         "tr": "Zincir eksik: Taban yedek bulunamadı ('{base}').",
         "en": "Chain missing: Base backup not found ('{base}')."
@@ -2496,6 +2500,10 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     "backup_warn_empty_dir_add_failed": {
         "tr": "Boş dizin arşive eklenemedi: {path} ({error})",
         "en": "Empty directory could not be added to archive: {path} ({error})"
+    },
+    "backup_warn_changed_during_backup": {
+        "tr": "{count} dosya yedekleme sırasında değişti veya kısaldı; arşive okunduğu andaki hâlleri alındı (ör. {examples}). Açık bir uygulamaya aitlerse kendi aralarında tutarsız olabilirler.",
+        "en": "{count} file(s) changed or shrank during the backup; the archive holds their content as read at that moment (e.g. {examples}). If they belong to a running application, they may be inconsistent."
     },
     "backup_notify_encrypting_archive": {
         "tr": "Yedek arşivi AES-256 PBKDF2 ile şifreleniyor...",
