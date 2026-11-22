@@ -1022,6 +1022,10 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "tr": "Sürücü modülünün oluşması gereken çekirdek(ler): {kernels}",
         "en": "Kernel(s) the driver module must be built for: {kernels}"
     },
+    "driver_plan_extra_kernels": {
+        "tr": "Diğer kurulu çekirdek(ler): {kernels} (başlığı depoda varsa kurulur; aksi halde bu çekirdekle açılışta sürücü çalışmaz).",
+        "en": "Other installed kernel(s): {kernels} (headers will be installed if available in repo; otherwise driver will not work when booted)."
+    },
     "driver_plan_secure_boot": {
         "tr": "Secure Boot durumu: {state}",
         "en": "Secure Boot state: {state}"
@@ -1090,6 +1094,18 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "tr": "Sürücü modülü doğrulandı ({kernels}). Sürücünün etkinleşmesi için bilgisayarı yeniden başlatın.",
         "en": "Driver module verified ({kernels}). Restart the computer to activate the driver."
     },
+    "driver_warn_uncovered_kernels": {
+        "tr": "Uyarı: Sürücü modülü şu çekirdek(ler) için oluşturulamadı: {kernels}. Bilgisayar bu çekirdeklerle açılırsa sürücü çalışmaz ve grafik ekran gelmeyebilir.",
+        "en": "Warning: Driver module was not built for kernel(s): {kernels}. If booted with these kernels, the driver will not work and display may fail."
+    },
+    "driver_note_packages_replaced": {
+        "tr": "Kurulum sırasında şu paketler kaldırıldı veya değiştirildi: {pkgs}.",
+        "en": "The following packages were removed or replaced during installation: {pkgs}."
+    },
+    "driver_note_packages_restored": {
+        "tr": "Kurulum sırasında kaldırılan paketler geri kuruldu: {pkgs}.",
+        "en": "Packages removed during installation were restored: {pkgs}."
+    },
     "driver_status_dry_run": {
         "tr": "Kurulumdan sonra sürücü modülü şu çekirdek(ler) için doğrulanacak: {kernels}. Modül oluşmazsa bu adımda kurulan paketler kaldırılacak.",
         "en": "After installation the driver module will be verified for kernel(s): {kernels}. If it is missing, the packages installed in this step will be removed."
@@ -1137,6 +1153,10 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     "driver_notify_removing": {
         "tr": "Sürücü doğrulanamadı; bu adımda kurulan {count} paket kaldırılıyor...",
         "en": "Driver could not be verified; removing the {count} packages installed in this step..."
+    },
+    "driver_notify_reinstalling": {
+        "tr": "Kaldırılan paketler geri kuruluyor: {pkgs}...",
+        "en": "Reinstalling removed packages: {pkgs}..."
     },
     "restore_warn_driver_pkgs_from_backup": {
         "tr": "Yedekteki {count} sürücü paketi kurulmadı ({pkgs}). Çekirdek sürücüsü paketleri yalnızca 'Donanım Sürücülerini Kur' seçeneğiyle (CLI: --install-drivers), bu bilgisayarın donanımına göre ve denetlenerek kurulur.",

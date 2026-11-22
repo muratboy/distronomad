@@ -355,6 +355,7 @@ class DriverPlan:
     header_packages: List[str] = field(default_factory=list)      # eksik ve mutlaka kurulması gereken çekirdek başlıkları
     optional_packages: List[str] = field(default_factory=list)    # depoda varsa eklenen paketler (Debian başlık üst paketi)
     kernels: List[str] = field(default_factory=list)              # modülün bulunması gereken çekirdekler
+    extra_kernels: List[str] = field(default_factory=list)        # kernels_to_cover() dışında kalan kurulu çekirdekler
     secure_boot: Optional[bool] = None
     already_present: bool = False
     blockers: List[str] = field(default_factory=list)             # modül kurulumunu engelleyen nedenler
@@ -379,6 +380,8 @@ def build_driver_plan(recommended: List[str], family: str, package_manager: str)
         return plan
 
     plan.kernels = kernels_to_cover()
+    installed = installed_kernels()
+    plan.extra_kernels = [k for k in installed if k not in plan.kernels]
     plan.secure_boot = secure_boot_enabled()
     plan.distro_tool = find_distro_driver_tool()
 
@@ -405,6 +408,14 @@ def build_driver_plan(recommended: List[str], family: str, package_manager: str)
                 plan.blockers.append(t("driver_block_headers_unknown", kernel=kver))
             elif hp not in plan.header_packages:
                 plan.header_packages.append(hp)
+
+        for kver in plan.extra_kernels:
+            if headers_installed(kver):
+                continue
+            hp = header_package(family, kver)
+            if hp and is_valid_package_name(hp, manager=pm):
+                if hp not in plan.optional_packages and hp not in plan.header_packages:
+                    plan.optional_packages.append(hp)
 
     if family == "debian":
         for kver in plan.kernels:
@@ -435,6 +446,8 @@ def describe_driver_plan(plan: DriverPlan) -> List[str]:
         if cmd:
             lines.append(t("driver_plan_command", cmd=" ".join(cmd)))
         lines.append(t("driver_plan_kernels", kernels=", ".join(plan.kernels)))
+        if plan.extra_kernels:
+            lines.append(t("driver_plan_extra_kernels", kernels=", ".join(plan.extra_kernels)))
     lines.append(t("driver_plan_secure_boot", state=t(sb_key)))
     if plan.distro_tool:
         lines.append(t("driver_plan_distro_tool", tool=plan.distro_tool))

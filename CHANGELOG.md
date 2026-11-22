@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In the TUI, a restore that only installs drivers now asks for sudo first and skips the drivers if authentication fails.
 - Driver rollback on dnf tracks package names instead of full NVRA versions, preventing upgraded packages from being removed on rollback.
 - TUI restore operations execute sudo commands non-interactively with `-n` and maintain active authentication with a background keepalive thread, preventing hidden password prompts from stalling execution.
+- Driver installation plan covers additional installed kernels, installs their headers if available, and warns if modules are missing for any extra kernel.
+- Driver rollback reinstalls packages removed or replaced during the installation attempt, and includes both commands if manual remediation is required.
 
 ## [0.9.0] - 2026-11-01
 

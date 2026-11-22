@@ -1161,6 +1161,7 @@ class RestoreEngine:
             "message": "",
             "packages": [],
             "kernels": list(plan.kernels),
+            "uncovered_kernels": [],
             "removed": [],
             "manual_command": "",
         }
@@ -1258,6 +1259,9 @@ class RestoreEngine:
                 except Exception as e:
                     logger.warning(str(e))
 
+        after = drivers.installed_package_set(pm)
+        removed = sorted(before - after) if after is not None else []
+
         self._notify("sürücü", t("driver_notify_verifying"))
         missing_kernels = [
             k for k in plan.kernels
@@ -1266,7 +1270,17 @@ class RestoreEngine:
         if not install_error and not missing_kernels:
             results["installed_packages"].extend(to_install)
             report["status"] = "installed"
-            report["message"] = t("driver_status_installed", kernels=kernels_str)
+            msg = t("driver_status_installed", kernels=kernels_str)
+            uncovered = [
+                k for k in getattr(plan, "extra_kernels", [])
+                if not all(drivers.module_present(k, grp) for grp in plan.module_groups)
+            ]
+            report["uncovered_kernels"] = uncovered
+            if uncovered:
+                msg = f"{msg} {t('driver_warn_uncovered_kernels', kernels=', '.join(uncovered))}"
+            if removed:
+                msg = f"{msg} {t('driver_note_packages_replaced', pkgs=', '.join(removed))}"
+            report["message"] = msg
             return
 
         if install_error:
@@ -1275,7 +1289,6 @@ class RestoreEngine:
             reason = t("driver_reason_module_missing", kernels=", ".join(missing_kernels))
         _mark_failed(reason)
 
-        after = drivers.installed_package_set(pm)
         if after is None:
             # Bu adımda neyin kurulduğu bilinemiyor: kaldırma komutu kullanıcıya gösterilir
             manual = " ".join(drivers.removal_command(pm, to_install))
@@ -1286,27 +1299,64 @@ class RestoreEngine:
             return
 
         new_pkgs = sorted(after - before)
-        if not new_pkgs:
+        if not new_pkgs and not removed:
             report["status"] = "failed"
             report["message"] = t("driver_status_failed", reason=reason)
             return
 
-        rm_cmd = drivers.removal_command(pm, new_pkgs)
-        self._notify("sürücü", t("driver_notify_removing", count=len(new_pkgs)))
-        rm_ok = False
-        eff_rm_cmd = _make_sudo_cmd(rm_cmd, sudo_noninteractive)
-        try:
-            rm_proc = subprocess.run(eff_rm_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600)
-            rm_ok = rm_proc.returncode == 0
-        except Exception as e:
-            logger.warning(str(e))
+        rm_ok = True
+        rm_cmd: List[str] = []
+        if new_pkgs:
+            rm_cmd = drivers.removal_command(pm, new_pkgs)
+            self._notify("sürücü", t("driver_notify_removing", count=len(new_pkgs)))
+            eff_rm_cmd = _make_sudo_cmd(rm_cmd, sudo_noninteractive)
+            try:
+                rm_proc = subprocess.run(eff_rm_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600)
+                rm_ok = rm_proc.returncode == 0
+            except Exception as e:
+                logger.warning(str(e))
+                rm_ok = False
 
         if rm_ok:
-            report["status"] = "rolled_back"
-            report["removed"] = new_pkgs
-            report["message"] = t("driver_status_rolled_back", reason=reason, count=len(new_pkgs))
+            if removed:
+                reinstall_cmd, _ = drivers.driver_install_command(pm, removed)
+                eff_reinstall_cmd = _make_sudo_cmd(reinstall_cmd, sudo_noninteractive)
+                self._notify("sürücü", t("driver_notify_reinstalling", pkgs=", ".join(removed)))
+                reinstall_ok = False
+                if eff_reinstall_cmd:
+                    try:
+                        reinstall_proc = subprocess.run(
+                            eff_reinstall_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            timeout=drivers.DRIVER_INSTALL_TIMEOUT
+                        )
+                        reinstall_ok = reinstall_proc.returncode == 0
+                    except Exception as e:
+                        logger.warning(str(e))
+                if reinstall_ok:
+                    report["status"] = "rolled_back"
+                    report["removed"] = new_pkgs
+                    base_msg = t("driver_status_rolled_back", reason=reason, count=len(new_pkgs)) if new_pkgs else t("driver_status_failed", reason=reason)
+                    report["message"] = f"{base_msg} {t('driver_note_packages_restored', pkgs=', '.join(removed))}"
+                else:
+                    manual_parts = [" ".join(rm_cmd)] if rm_cmd else []
+                    if reinstall_cmd:
+                        manual_parts.append(" ".join(reinstall_cmd))
+                    manual = " && ".join(manual_parts)
+                    report["status"] = "rollback_failed"
+                    report["manual_command"] = manual
+                    report["message"] = t("driver_status_rollback_failed", reason=reason, cmd=manual)
+                    logger.error(report["message"])
+            else:
+                report["status"] = "rolled_back"
+                report["removed"] = new_pkgs
+                report["message"] = t("driver_status_rolled_back", reason=reason, count=len(new_pkgs))
         else:
-            manual = " ".join(rm_cmd)
+            manual_parts = [" ".join(rm_cmd)] if rm_cmd else []
+            if removed:
+                reinstall_cmd, _ = drivers.driver_install_command(pm, removed)
+                if reinstall_cmd:
+                    manual_parts.append(" ".join(reinstall_cmd))
+            manual = " && ".join(manual_parts)
             report["status"] = "rollback_failed"
             report["manual_command"] = manual
             report["message"] = t("driver_status_rollback_failed", reason=reason, cmd=manual)

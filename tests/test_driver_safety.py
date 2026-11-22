@@ -144,7 +144,7 @@ class FakePackageSystem:
 
     def __init__(self, monkeypatch, host, *, installed, adds, trigger="nvidia-driver",
                  build_for=(), build_on="install", module_rel="updates/dkms/nvidia-current.ko.xz",
-                 install_rc=0, remove_rc=0):
+                 install_rc=0, remove_rc=0, removes=(), reinstall_rc=0):
         self.host = host
         self.installed = set(installed)
         self.adds = list(adds)
@@ -154,6 +154,8 @@ class FakePackageSystem:
         self.module_rel = module_rel
         self.install_rc = install_rc
         self.remove_rc = remove_rc
+        self.removes = list(removes)
+        self.reinstall_rc = reinstall_rc
         self.calls = []
         self._inner = subprocess.run
         monkeypatch.setattr(subprocess, "run", self.run)
@@ -169,19 +171,29 @@ class FakePackageSystem:
             self.calls.append(cmd)
             if cmd[:3] in (["sudo", "-n", "true"], ["sudo", "-n", "-v"]):
                 return subprocess.CompletedProcess(cmd, 0, "", "")
-            if self.trigger in cmd and "install" in cmd:
+            if self.trigger in cmd and ("install" in cmd or "-S" in cmd):
                 self.installed |= set(self.adds)
+                if self.removes:
+                    self.installed -= set(self.removes)
                 if self.build_on == "install":
                     self._build()
                 err = "E: Sub-process /usr/bin/dpkg returned an error code (1)" if self.install_rc else ""
                 return subprocess.CompletedProcess(cmd, self.install_rc, "", err)
+            if self.removes and ("install" in cmd or "-S" in cmd) and any(p in cmd for p in self.removes):
+                if self.reinstall_rc == 0:
+                    self.installed |= set(self.removes)
+                err = "E: Sub-process /usr/bin/dpkg returned an error code (1)" if self.reinstall_rc else ""
+                return subprocess.CompletedProcess(cmd, self.reinstall_rc, "", err)
             if "akmods" in cmd:
                 if self.build_on == "akmods":
                     self._build()
                 return subprocess.CompletedProcess(cmd, 0, "", "")
             if "purge" in cmd or "-Rn" in cmd or "remove" in cmd:
                 if self.remove_rc == 0:
-                    self.installed -= set(cmd[cmd.index("--") + 1:])
+                    if "--" in cmd:
+                        self.installed -= set(cmd[cmd.index("--") + 1:])
+                    else:
+                        self.installed -= set(self.adds)
                 return subprocess.CompletedProcess(cmd, self.remove_rc, "", "")
         return self._inner(cmd, *args, **kwargs)
 
@@ -1255,3 +1267,154 @@ def test_engine_sudo_noninteractive_skips_when_sudo_not_ready_without_prompt(tmp
 
     assert any(t("restore_sudo_failed_tag") in f for f in res["failed_packages"])
     assert "curl" not in res["installed_packages"]
+
+
+# ---------------------------------------------------------------------------
+# TUR B: diğer kurulu çekirdekler ve kaldırılan paketlerin geri kurulması
+# ---------------------------------------------------------------------------
+
+def test_extra_kernels_plan_and_uncovered_warning(tmp_path, monkeypatch, host):
+    """kernels_to_cover dışındaki kurulu çekirdekler extra_kernels'e eklenir,
+    başlık paketleri optional_packages'a konur. Modül yalnızca zorunlulara derlenirse
+    durum installed + uncovered uyarısı olur."""
+    k_old = "6.1.0-16-amd64"
+    k_running = "6.1.0-18-amd64"
+    k_new = "6.1.0-20-amd64"
+
+    _add_kernel(host, k_old)
+    _add_kernel(host, k_running)
+    _add_kernel(host, k_new)
+    monkeypatch.setattr(drivers, "running_kernel", lambda: k_running)
+
+    # 1. Plan denetimi
+    plan = drivers.build_driver_plan(["nvidia-driver"], "debian", "apt")
+    assert plan.kernels == [k_running, k_new]
+    assert plan.extra_kernels == [k_old]
+    assert f"linux-headers-{k_old}" in plan.optional_packages
+
+    desc = drivers.describe_driver_plan(plan)
+    desc_text = " ".join(desc)
+    assert k_old in desc_text
+    assert t("driver_plan_extra_kernels", kernels=k_old) in desc
+
+    # 2. Modül yalnızca zorunlu çekirdeklere (running, new) derlenince:
+    fake1 = FakePackageSystem(
+        monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS,
+        build_for=[k_running, k_new],
+    )
+    res1 = _run_pardus_restore(tmp_path / "run1", monkeypatch)
+    report1 = res1["driver_report"]
+    assert report1["status"] == "installed"
+    assert report1["uncovered_kernels"] == [k_old]
+    assert t("driver_warn_uncovered_kernels", kernels=k_old) in report1["message"]
+
+
+def test_extra_kernels_all_covered_no_warning(tmp_path, monkeypatch, host):
+    """Modül tüm çekirdeklere (running, new, old) derlenince durum installed olur
+    ve uncovered uyarısı verilmez."""
+    k_old = "6.1.0-16-amd64"
+    k_running = "6.1.0-18-amd64"
+    k_new = "6.1.0-20-amd64"
+
+    _add_kernel(host, k_old)
+    _add_kernel(host, k_running)
+    _add_kernel(host, k_new)
+    monkeypatch.setattr(drivers, "running_kernel", lambda: k_running)
+
+    fake2 = FakePackageSystem(
+        monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS,
+        build_for=[k_running, k_new, k_old],
+    )
+    res2 = _run_pardus_restore(tmp_path / "run2", monkeypatch)
+    report2 = res2["driver_report"]
+    assert report2["status"] == "installed"
+    assert report2["uncovered_kernels"] == []
+    assert t("driver_warn_uncovered_kernels", kernels=k_old) not in report2["message"]
+
+
+def test_engine_rollback_reinstalls_removed_packages(tmp_path, monkeypatch, host):
+    """Kurulum bir paketi kaldırıyor ve modül oluşmuyorsa:
+    yeni paketler kaldırılır, kaldırılan paketler geri kurulur ve son paket kümesi
+    kurulum öncesiyle aynı olur."""
+    _pardus_host(host)
+    initial_pkgs = {"bash", "xserver-xorg-video-nouveau"}
+    removed_pkg = "xserver-xorg-video-nouveau"
+
+    fake = FakePackageSystem(
+        monkeypatch, host, installed=initial_pkgs, adds=DEBIAN_ADDS,
+        build_for=[], removes=[removed_pkg],
+    )
+    res = _run_pardus_restore(tmp_path, monkeypatch)
+    report = res["driver_report"]
+
+    assert report["status"] == "rolled_back"
+    assert set(report["removed"]) == set(DEBIAN_ADDS)
+    assert t("driver_note_packages_restored", pkgs=removed_pkg) in report["message"]
+    # Son paket kümesi başlangıçtaki ile birebir aynı olmalı
+    assert fake.installed == initial_pkgs
+
+    # Çağrılarda hem purge hem de kaldırılan paketin install komutu bulunmalı
+    purge_calls = fake.with_word("purge")
+    assert purge_calls
+    reinstall_calls = [c for c in fake.with_word("install") if removed_pkg in c and "nvidia-driver" not in c]
+    assert reinstall_calls
+
+
+def test_engine_rollback_failed_when_reinstall_fails_includes_both_in_manual_command(tmp_path, monkeypatch, host):
+    """Geri kurma komutu başarısız olursa durum rollback_failed olur ve
+    manual_command hem kaldırma hem de geri kurma komutunu ' && ' ile içerir (ve -n içermez)."""
+    _pardus_host(host)
+    initial_pkgs = {"bash", "xserver-xorg-video-nouveau"}
+    removed_pkg = "xserver-xorg-video-nouveau"
+
+    fake = FakePackageSystem(
+        monkeypatch, host, installed=initial_pkgs, adds=DEBIAN_ADDS,
+        build_for=[], removes=[removed_pkg], reinstall_rc=100,
+    )
+    res = _run_pardus_restore(tmp_path, monkeypatch)
+    report = res["driver_report"]
+
+    assert report["status"] == "rollback_failed"
+    manual = report["manual_command"]
+    assert " && " in manual
+    assert "-n" not in manual.split()
+    assert "purge" in manual
+    assert removed_pkg in manual
+    assert t("driver_status_rollback_failed", reason=t("driver_reason_module_missing", kernels=DEBIAN_KERNEL), cmd=manual) == report["message"]
+
+
+def test_engine_success_with_removed_packages_notes_replacement(tmp_path, monkeypatch, host):
+    """Başarı yolunda kaldırılan/değiştirilen paket varsa mesaja not eklenir."""
+    _pardus_host(host)
+    initial_pkgs = {"bash", "xserver-xorg-video-nouveau"}
+    removed_pkg = "xserver-xorg-video-nouveau"
+
+    fake = FakePackageSystem(
+        monkeypatch, host, installed=initial_pkgs, adds=DEBIAN_ADDS,
+        build_for=[DEBIAN_KERNEL], removes=[removed_pkg],
+    )
+    res = _run_pardus_restore(tmp_path, monkeypatch)
+    report = res["driver_report"]
+
+    assert report["status"] == "installed"
+    assert t("driver_note_packages_replaced", pkgs=removed_pkg) in report["message"]
+
+
+def test_engine_rollback_reinstalls_when_no_new_pkgs_but_removed_exists(tmp_path, monkeypatch, host):
+    """Yeni paket yok ama removed doluysa da kaldırılan paketler geri kurulur."""
+    _pardus_host(host)
+    initial_pkgs = {"bash", "xserver-xorg-video-nouveau"}
+    removed_pkg = "xserver-xorg-video-nouveau"
+
+    fake = FakePackageSystem(
+        monkeypatch, host, installed=initial_pkgs, adds=[],
+        build_for=[], removes=[removed_pkg],
+    )
+    res = _run_pardus_restore(tmp_path, monkeypatch)
+    report = res["driver_report"]
+
+    assert report["status"] == "rolled_back"
+    assert report["removed"] == []
+    assert t("driver_note_packages_restored", pkgs=removed_pkg) in report["message"]
+    assert fake.installed == initial_pkgs
+
