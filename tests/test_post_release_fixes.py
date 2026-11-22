@@ -182,6 +182,21 @@ def test_find_running_browsers_matches_only_selected_profiles(tmp_path, monkeypa
     assert {"firefox", "brave", "chrome", "thunderbird"} <= set(cmd[-1].split("|"))
 
 
+def test_find_running_browsers_snap_profiles(tmp_path, monkeypatch):
+    """Ubuntu'nun Snap tarayıcıları (~/snap/...) açıkken de uyarı verilir; aynı ad iki kez yazılmaz."""
+    home = tmp_path / "home"
+    _fake_pgrep(monkeypatch, "1234 firefox\n2345 chrome\n3456 thunderbird\n")
+
+    snap_firefox = home / "snap/firefox/common/.mozilla/firefox"
+    assert find_running_browsers([str(snap_firefox)], home_dir=str(home)) == ["Firefox"]
+    assert find_running_browsers([str(home / "snap/thunderbird")], home_dir=str(home)) == ["Thunderbird"]
+    # Snap Chromium "chrome" adıyla çalışır; yalnızca Snap profili seçiliyse Chromium sayılır
+    assert find_running_browsers([str(home / "snap/chromium/common/chromium")], home_dir=str(home)) == ["Chromium"]
+    assert find_running_browsers([str(home / ".config/chromium")], home_dir=str(home)) == []
+    names = find_running_browsers([str(home)], home_dir=str(home))
+    assert names.count("Chromium") == 1 and "Firefox" in names and "Google Chrome" in names
+
+
 def test_find_running_browsers_without_running_process_or_pgrep(tmp_path, monkeypatch):
     """Açık tarayıcı yoksa veya pgrep bulunamazsa uyarı üretilmemelidir."""
     home = tmp_path / "home"

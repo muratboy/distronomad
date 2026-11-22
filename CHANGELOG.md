@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Driver packages listed in the backup from the same distribution family (such as `nvidia-settings`) are installed after the driver step succeeds, through the same checked step, instead of being dropped.
 - Declining the kernel-module driver (CLI prompt, no interactive terminal, or "Skip Kernel Driver" in the TUI) no longer drops low-risk driver packages such as microcode and firmware.
 - The TUI computes the driver plan in a background worker instead of freezing the interface, and the restore uses exactly the plan shown for confirmation.
+- The running-browser warning also covers Snap profiles under `~/snap` (Firefox, Thunderbird, Chromium, Brave, Opera).
 
 ## [0.9.0] - 2026-11-01
 

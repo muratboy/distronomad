@@ -146,16 +146,18 @@ def get_dir_size_and_count(path: Path) -> Tuple[int, int]:
 # Açıkken profil dosyalarına (çerez, geçmiş, oturum veritabanları) sürekli yazan tarayıcı ve e-posta istemcileri:
 # (görünen ad, süreç adları, ev dizinine göre profil dizinleri)
 PROFILE_WRITING_APPS = [
-    ("Firefox", ("firefox", "firefox-esr", "firefox-bin"), (".mozilla/firefox", ".config/mozilla/firefox", ".var/app/org.mozilla.firefox")),
-    ("Thunderbird", ("thunderbird", "thunderbird-bin"), (".thunderbird", ".var/app/org.mozilla.Thunderbird")),
+    ("Firefox", ("firefox", "firefox-esr", "firefox-bin"), (".mozilla/firefox", ".config/mozilla/firefox", ".var/app/org.mozilla.firefox", "snap/firefox")),
+    ("Thunderbird", ("thunderbird", "thunderbird-bin"), (".thunderbird", ".var/app/org.mozilla.Thunderbird", "snap/thunderbird")),
     ("Zen", ("zen", "zen-bin"), (".zen", ".var/app/app.zen_browser.zen")),
     ("LibreWolf", ("librewolf", "librewolf-bin"), (".librewolf", ".var/app/io.gitlab.librewolf-community")),
     ("Waterfox", ("waterfox", "waterfox-bin"), (".waterfox",)),
-    ("Brave", ("brave",), (".config/BraveSoftware", ".var/app/com.brave.Browser")),
+    ("Brave", ("brave",), (".config/BraveSoftware", ".var/app/com.brave.Browser", "snap/brave")),
     ("Google Chrome", ("chrome",), (".config/google-chrome", ".var/app/com.google.Chrome")),
     ("Chromium", ("chromium",), (".config/chromium", ".var/app/org.chromium.Chromium")),
+    # Snap Chromium "chrome" süreç adıyla çalışır; Google Chrome ile karışmasın diye ayrı girdi
+    ("Chromium", ("chrome", "chromium"), ("snap/chromium",)),
     ("Vivaldi", ("vivaldi-bin",), (".config/vivaldi",)),
-    ("Opera", ("opera",), (".config/opera",)),
+    ("Opera", ("opera",), (".config/opera", "snap/opera")),
     ("Microsoft Edge", ("msedge",), (".config/microsoft-edge",)),
 ]
 
@@ -190,7 +192,8 @@ def find_running_browsers(selected_paths: List[str], home_dir: Optional[str] = N
             profile = Path(os.path.abspath(home / rel))
             # Profil seçili yolun içindeyse (ör. tüm ~/.config) veya seçili yol profilin içindeyse çakışır
             if any(s == profile or s in profile.parents or profile in s.parents for s in selected):
-                found.append(display_name)
+                if display_name not in found:
+                    found.append(display_name)
                 break
     return found
 
