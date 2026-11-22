@@ -9,6 +9,7 @@ import json
 import subprocess
 import tempfile
 import re
+import threading
 from pathlib import Path
 from typing import Callable, Optional, List, Dict, Tuple, Any, Union
 from datetime import datetime
@@ -62,6 +63,64 @@ def _is_sudo_auth_failure(stderr_text: Optional[str]) -> bool:
     """Komut çıktısının sudo yetki/parola hatasına işaret edip etmediğini döndürür."""
     low = (stderr_text or "").lower()
     return any(marker in low for marker in _SUDO_AUTH_FAILURE_MARKERS)
+
+
+SUDO_KEEPALIVE_INTERVAL: float = 60.0
+
+
+def _make_sudo_cmd(cmd: List[str], noninteractive: bool = False) -> List[str]:
+    """sudo komutuna noninteractive modda -n bayrağı ekler (zaten -n yoksa)."""
+    if not noninteractive or not cmd:
+        return list(cmd)
+    if cmd[0] == "sudo":
+        if len(cmd) > 1 and cmd[1] == "-n":
+            return list(cmd)
+        return ["sudo", "-n"] + list(cmd[1:])
+    return list(cmd)
+
+
+class SudoKeepalive:
+    """sudo_noninteractive modunda sudo biletinin süresinin dolmaması için
+    periyodik olarak 'sudo -n -v' çalıştıran arka plan iş parçacığı."""
+
+    def __init__(self, interval: Optional[float] = None):
+        self._custom_interval = interval
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    @property
+    def interval(self) -> float:
+        return self._custom_interval if self._custom_interval is not None else SUDO_KEEPALIVE_INTERVAL
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._run, name="sudo-keepalive", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(self.interval):
+            if self._stop_event.is_set():
+                break
+            try:
+                subprocess.run(
+                    ["sudo", "-n", "-v"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                )
+            except Exception:
+                pass
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
 
 
 class RestoreEngine:
@@ -450,6 +509,7 @@ class RestoreEngine:
                 except Exception:
                     pass
 
+        keepalive = None
         try:
             # 1. Aşama: Konfigürasyonları Geri Yükle
             configs_src = self.source_dir / "configs"
@@ -742,7 +802,11 @@ class RestoreEngine:
                     processed_count=current_step,
                     total_count=total_steps
                 )
-    
+
+                if options.sudo_noninteractive and not options.dry_run:
+                    keepalive = SudoKeepalive()
+                    keepalive.start()
+
                 src_family = detect_distro_family(self.manifest.system_info.distro_id, self.manifest.system_info.distro_like)
                 target_family = detect_distro_family(current_sys.distro_id, current_sys.distro_like)
 
@@ -876,6 +940,8 @@ class RestoreEngine:
 
                         import sys
                         is_interactive = bool(sys.stdin and hasattr(sys.stdin, "isatty") and sys.stdin.isatty())
+                        if options.sudo_noninteractive:
+                            is_interactive = False
 
                         if not sudo_ok and not is_interactive and not options.dry_run:
                             warn_msg = t("restore_warn_sudo_no_terminal", pm=pm)
@@ -892,7 +958,7 @@ class RestoreEngine:
                             self._notify("kurulum", t("restore_notify_apt_update"))
                             try:
                                 proc_up = subprocess.run(
-                                    ["sudo", "apt-get", "update"],
+                                    _make_sudo_cmd(["sudo", "apt-get", "update"], options.sudo_noninteractive),
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     text=True,
@@ -911,7 +977,8 @@ class RestoreEngine:
                         timeout_sec = max(300, len(pkg_list) * 60)
                         try:
                             # 1. Adım: Toplu paket kurulumu dene
-                            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout_sec)
+                            eff_cmd = _make_sudo_cmd(cmd, options.sudo_noninteractive)
+                            proc = subprocess.run(eff_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout_sec)
                             if proc.returncode == 0:
                                 results["installed_packages"].extend(pkg_list)
                             else:
@@ -921,7 +988,8 @@ class RestoreEngine:
                                 for single_pkg in pkg_list:
                                     s_cmd, _ = get_install_command(pm, [single_pkg])
                                     try:
-                                        s_proc = subprocess.run(s_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+                                        eff_s_cmd = _make_sudo_cmd(s_cmd, options.sudo_noninteractive)
+                                        s_proc = subprocess.run(eff_s_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
                                         if s_proc.returncode == 0:
                                             results["installed_packages"].append(single_pkg)
                                             consecutive_auth_or_timeout_failures = 0
@@ -952,7 +1020,10 @@ class RestoreEngine:
                             results["failed_packages"].append(t("restore_err_pkg_error", pm=pm, error=str(e)))
 
                 if driver_plan is not None and driver_plan.module_packages:
-                    self._install_module_drivers(driver_plan, results, options.dry_run, apt_updated)
+                    self._install_module_drivers(
+                        driver_plan, results, options.dry_run, apt_updated,
+                        sudo_noninteractive=options.sudo_noninteractive
+                    )
 
             # 4. Aşama: Sistem Durumu (dconf, crontab ve /etc referansları) Geri Yükleme
             state_src = self.source_dir / "system_state"
@@ -1064,6 +1135,8 @@ class RestoreEngine:
             self._notify("tamamlandı", t("restore_notify_completed"), percent=100.0)
             return results
         finally:
+            if keepalive:
+                keepalive.stop()
             _save_transaction_log()
 
     def _install_module_drivers(
@@ -1071,7 +1144,8 @@ class RestoreEngine:
         plan: "drivers.DriverPlan",
         results: Dict[str, Any],
         dry_run: bool,
-        apt_updated: bool
+        apt_updated: bool,
+        sudo_noninteractive: bool = False
     ) -> None:
         """
         Çekirdek modülü kuran sürücüleri (NVIDIA, Broadcom wl) ayrı bir adımda kurar:
@@ -1114,7 +1188,7 @@ class RestoreEngine:
             _skip(plan.blockers)
             return
 
-        if not dry_run and not drivers.sudo_ready():
+        if not dry_run and not drivers.sudo_ready(allow_prompt=not sudo_noninteractive):
             _skip([t("driver_block_sudo")])
             return
 
@@ -1122,7 +1196,10 @@ class RestoreEngine:
         if pm in ("apt", "apt-get") and not apt_updated and not dry_run:
             self._notify("kurulum", t("restore_notify_apt_update"))
             try:
-                subprocess.run(["sudo", "apt-get", "update"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+                subprocess.run(
+                    _make_sudo_cmd(["sudo", "apt-get", "update"], sudo_noninteractive),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120
+                )
             except Exception as e:
                 logger.warning(t("restore_err_update_error", pm=pm, error=str(e)))
 
@@ -1153,9 +1230,10 @@ class RestoreEngine:
 
         self._notify("sürücü", t("driver_notify_installing", pkgs=", ".join(to_install)))
         install_error = ""
+        eff_cmd = _make_sudo_cmd(cmd, sudo_noninteractive)
         try:
             proc = subprocess.run(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                eff_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                 timeout=drivers.DRIVER_INSTALL_TIMEOUT
             )
             if proc.returncode != 0:
@@ -1171,8 +1249,9 @@ class RestoreEngine:
             self._notify("sürücü", t("driver_notify_building"))
             for kver in plan.kernels:
                 try:
+                    akmods_cmd = _make_sudo_cmd(["sudo", "akmods", "--force", "--kernels", kver], sudo_noninteractive)
                     subprocess.run(
-                        ["sudo", "akmods", "--force", "--kernels", kver],
+                        akmods_cmd,
                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                         timeout=drivers.DRIVER_INSTALL_TIMEOUT
                     )
@@ -1215,8 +1294,9 @@ class RestoreEngine:
         rm_cmd = drivers.removal_command(pm, new_pkgs)
         self._notify("sürücü", t("driver_notify_removing", count=len(new_pkgs)))
         rm_ok = False
+        eff_rm_cmd = _make_sudo_cmd(rm_cmd, sudo_noninteractive)
         try:
-            rm_proc = subprocess.run(rm_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600)
+            rm_proc = subprocess.run(eff_rm_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600)
             rm_ok = rm_proc.returncode == 0
         except Exception as e:
             logger.warning(str(e))

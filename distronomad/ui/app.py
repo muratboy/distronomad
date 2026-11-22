@@ -2760,7 +2760,8 @@ class DistroNomadApp(App):
             restore_system_state=restore_sys_state,
             dry_run=dry_run,
             install_drivers=install_drivers,
-            allow_external_paths=allow_external
+            allow_external_paths=allow_external,
+            sudo_noninteractive=True
         )
 
         old_engine = self.current_restore_engine

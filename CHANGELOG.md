@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tar archives hash each file from the same read that writes it. Files that change during the backup are listed, a file that shrinks no longer corrupts the archive, and hard links are stored as regular files.
 - Backups warn (the TUI asks) when a browser or mail client whose profile is selected is running.
 - In the TUI, a restore that only installs drivers now asks for sudo first and skips the drivers if authentication fails.
+- Driver rollback on dnf tracks package names instead of full NVRA versions, preventing upgraded packages from being removed on rollback.
+- TUI restore operations execute sudo commands non-interactively with `-n` and maintain active authentication with a background keepalive thread, preventing hidden password prompts from stalling execution.
 
 ## [0.9.0] - 2026-11-01
 

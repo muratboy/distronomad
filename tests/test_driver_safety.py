@@ -63,7 +63,7 @@ def host(tmp_path, monkeypatch):
     monkeypatch.setattr(drivers, "SIG_ENFORCE_FILE", root / "sig_enforce")
     monkeypatch.setattr(drivers, "running_kernel", lambda: DEBIAN_KERNEL)
     monkeypatch.setattr(drivers, "find_distro_driver_tool", lambda: "")
-    monkeypatch.setattr(drivers, "sudo_ready", lambda: True)
+    monkeypatch.setattr(drivers, "sudo_ready", lambda *args, **kwargs: True)
     monkeypatch.setattr(drivers, "package_available", lambda pm, name: True)
     return SimpleNamespace(root=root, modules=modules, boot=boot)
 
@@ -167,7 +167,7 @@ class FakePackageSystem:
         if isinstance(cmd, (list, tuple)):
             cmd = [str(c) for c in cmd]
             self.calls.append(cmd)
-            if cmd[:3] == ["sudo", "-n", "true"]:
+            if cmd[:3] in (["sudo", "-n", "true"], ["sudo", "-n", "-v"]):
                 return subprocess.CompletedProcess(cmd, 0, "", "")
             if self.trigger in cmd and "install" in cmd:
                 self.installed |= set(self.adds)
@@ -474,20 +474,25 @@ def test_installed_package_set_parses_dpkg_and_rpm(monkeypatch):
     outputs = {
         "dpkg-query": (0, "installed bash\nconfig-files eski-paket\nnot-installed yok\n"
                           "half-configured nvidia-kernel-dkms\nunpacked libfoo:i386\n"),
-        "rpm": (0, "kernel-devel-6.11.4-301.fc41.x86_64\ngpg-pubkey-abcd1234-5678\nbash-5.2-1.fc41.x86_64\n"),
+        "rpm": (0, "kernel-devel\ngpg-pubkey-abcd1234-5678\nbash\n"),
         "pacman": (1, ""),
     }
+    calls = []
 
     def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
         rc, out = outputs[cmd[0]]
         return subprocess.CompletedProcess(cmd, rc, out, "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     assert drivers.installed_package_set("apt") == {"bash", "nvidia-kernel-dkms", "libfoo:i386"}
-    assert drivers.installed_package_set("dnf") == {"kernel-devel-6.11.4-301.fc41.x86_64", "bash-5.2-1.fc41.x86_64"}
+    assert drivers.installed_package_set("dnf") == {"kernel-devel", "bash"}
+    assert drivers.installed_package_set("zypper") == {"kernel-devel", "bash"}
     assert drivers.installed_package_set("pacman") is None
     assert drivers.installed_package_set("flatpak") is None
+    rpm_dnf_call = [c for c in calls if c[0] == "rpm"][0]
+    assert "%{NAME}\\n" in rpm_dnf_call
 
 
 def test_driver_install_and_removal_commands():
@@ -671,7 +676,7 @@ def test_engine_skips_without_package_snapshot(tmp_path, monkeypatch, host):
 def test_engine_skips_without_sudo(tmp_path, monkeypatch, host):
     _pardus_host(host)
     fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS)
-    monkeypatch.setattr(drivers, "sudo_ready", lambda: False)
+    monkeypatch.setattr(drivers, "sudo_ready", lambda *args, **kwargs: False)
 
     res = _run_pardus_restore(tmp_path, monkeypatch)
 
@@ -711,7 +716,7 @@ def test_engine_fedora_waits_for_akmods_before_verifying(tmp_path, monkeypatch, 
     _add_kernel(host, kver, boot_vmlinuz=False, module_vmlinuz=True)
     adds = ["akmod-nvidia", "akmods", f"kernel-devel-{kver}", "xorg-x11-drv-nvidia"]
     fake = FakePackageSystem(
-        monkeypatch, host, installed={"bash-5.2-1.fc41.x86_64"}, adds=adds, trigger="akmod-nvidia",
+        monkeypatch, host, installed={"bash"}, adds=adds, trigger="akmod-nvidia",
         build_for=[kver], build_on="akmods", module_rel="extra/nvidia/nvidia.ko.xz",
     )
     monkeypatch.setattr("distronomad.restore.shutil.which", lambda name: "/usr/sbin/akmods" if name == "akmods" else None)
@@ -1021,3 +1026,232 @@ def test_standalone_script_skips_driver_packages(tmp_path):
     assert "bash" in calls and "git" in calls
     assert "nvidia" not in calls.lower() and "broadcom" not in calls
     assert "Driver package not installed automatically" in proc.stdout + proc.stderr
+
+
+# ---------------------------------------------------------------------------
+# TUR A: dnf yükseltme güvenliği ve non-interactive sudo testleri
+# ---------------------------------------------------------------------------
+
+def test_engine_fedora_rollback_does_not_remove_upgraded_package(tmp_path, monkeypatch, host):
+    """Fedora'da sürücü kurulumunda sistemdeki bir paket yükseltilirse ve modül oluşmazsa,
+    geri almada yükseltilen paket kaldırılmaz; yalnızca yeni adlar kaldırılır."""
+    kver = "6.11.4-301.fc41.x86_64"
+    monkeypatch.setattr(drivers, "running_kernel", lambda: kver)
+    _add_kernel(host, kver, boot_vmlinuz=False, module_vmlinuz=True)
+
+    adds = ["akmod-nvidia", "xorg-x11-drv-nvidia", f"kernel-devel-{kver}"]
+    initial_installed = {"bash", "kernel-headers"}
+
+    fake = FakePackageSystem(
+        monkeypatch, host, installed=initial_installed, adds=adds, trigger="akmod-nvidia",
+        build_for=[],
+    )
+    profile = HardwareProfile(gpu_vendor="nvidia", recommended_packages={"fedora": ["akmod-nvidia", "xorg-x11-drv-nvidia"]})
+    monkeypatch.setattr("distronomad.restore.scan_hardware_profile", lambda: profile)
+
+    backup = _make_backup(tmp_path / "fedora_rollback_backup.tar.gz")
+    engine = RestoreEngine(backup_path=backup, transaction_dir=tmp_path / "tx")
+    engine.load_manifest()
+    target = SystemInfo(distro_name="Fedora", distro_id="fedora", available_package_managers=["dnf"], home_dir=str(tmp_path / "home"))
+    res = engine.execute_restore(
+        RestoreOptions(target_home=str(tmp_path / "home"), selected_configs=[], install_packages=False, install_drivers=True),
+        target_system_info=target,
+    )
+    engine.cleanup()
+
+    report = res["driver_report"]
+    assert report["status"] == "rolled_back", report
+    assert "kernel-headers" not in report["removed"]
+    assert "bash" not in report["removed"]
+    assert set(report["removed"]) == {"akmod-nvidia", "xorg-x11-drv-nvidia", f"kernel-devel-{kver}"}
+    remove_calls = fake.with_word("remove")
+    assert remove_calls
+    for cmd in remove_calls:
+        assert "kernel-headers" not in cmd
+        assert "bash" not in cmd
+
+
+@pytest.mark.asyncio
+async def test_tui_restore_options_sets_sudo_noninteractive(tmp_path, monkeypatch):
+    """TUI geri yükleme seçeneklerinde sudo_noninteractive bayrağı True olarak atanmalıdır."""
+    backup = _tui_setup(tmp_path, monkeypatch)
+    app = DistroNomadApp(home_dir=str(tmp_path), lang="tr")
+    async with app.run_test(size=(140, 45)) as pilot:
+        captured = await _start_restore_with_drivers(app, pilot, backup)
+        app.screen.query_one("#btn-driver-install", Button).press()
+        await pilot.pause()
+        assert len(captured) == 1
+        assert captured[0].sudo_noninteractive is True
+
+
+def test_engine_sudo_noninteractive_prepends_flag_to_sudo_commands(tmp_path, monkeypatch, host):
+    """sudo_noninteractive=True iken motor tarafından çalıştırılan tüm sudo komutları sudo -n ile başlamalıdır."""
+    _pardus_host(host)
+    fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS, build_for=[DEBIAN_KERNEL])
+
+    backup = _make_backup(tmp_path / "sudo_noninteractive_backup.tar.gz")
+    engine = RestoreEngine(backup_path=backup, transaction_dir=tmp_path / "tx")
+    engine.load_manifest()
+    target = SystemInfo(
+        distro_name="Pardus",
+        distro_id="pardus",
+        distro_like="debian",
+        available_package_managers=["apt"],
+        home_dir=str(tmp_path / "home"),
+    )
+    options = RestoreOptions(
+        target_home=str(tmp_path / "home"),
+        selected_packages=[PackageItem(name="curl", manager="apt")],
+        selected_configs=[],
+        install_packages=True,
+        install_drivers=True,
+        sudo_noninteractive=True,
+    )
+    monkeypatch.setattr("distronomad.restore.scan_hardware_profile", lambda: _pardus_profile())
+    res = engine.execute_restore(options, target_system_info=target)
+    engine.cleanup()
+
+    assert res["driver_report"]["status"] == "installed"
+    sudo_calls = [c for c in fake.calls if c and c[0] == "sudo"]
+    assert len(sudo_calls) >= 2
+    for cmd in sudo_calls:
+        assert cmd[1] == "-n", f"Komut -n içermiyor: {cmd}"
+
+
+def test_sudo_ready_allow_prompt_behavior(monkeypatch):
+    """sudo_ready allow_prompt=False iken TTY olsa dahi sudo -n true başarısızsa False dönmelidir."""
+    def fake_run(cmd, *args, **kwargs):
+        if isinstance(cmd, (list, tuple)) and cmd[:3] == ["sudo", "-n", "true"]:
+            return subprocess.CompletedProcess(cmd, 1, "", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    assert drivers.sudo_ready(allow_prompt=True) is True
+    assert drivers.sudo_ready(allow_prompt=False) is False
+
+    monkeypatch.setattr(subprocess, "run", lambda cmd, *a, **kw: subprocess.CompletedProcess(cmd, 0, "", ""))
+    assert drivers.sudo_ready(allow_prompt=True) is True
+    assert drivers.sudo_ready(allow_prompt=False) is True
+
+
+def test_engine_sudo_noninteractive_rollback_failed_has_no_n_in_manual_command(tmp_path, monkeypatch, host):
+    """sudo_noninteractive modunda kaldırma başarısız olunca durum rollback_failed olur
+    ve manual_command kullanıcının terminalde girmesi için -n bayrağı içermez."""
+    _pardus_host(host)
+    fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS, remove_rc=100)
+
+    backup = _make_backup(tmp_path / "sudo_manual_backup.tar.gz")
+    engine = RestoreEngine(backup_path=backup, transaction_dir=tmp_path / "tx")
+    engine.load_manifest()
+    target = SystemInfo(
+        distro_name="Pardus",
+        distro_id="pardus",
+        distro_like="debian",
+        available_package_managers=["apt"],
+        home_dir=str(tmp_path / "home"),
+    )
+    options = RestoreOptions(
+        target_home=str(tmp_path / "home"),
+        selected_packages=[],
+        selected_configs=[],
+        install_packages=False,
+        install_drivers=True,
+        sudo_noninteractive=True,
+    )
+    monkeypatch.setattr("distronomad.restore.scan_hardware_profile", lambda: _pardus_profile())
+    res = engine.execute_restore(options, target_system_info=target)
+    engine.cleanup()
+
+    report = res["driver_report"]
+    assert report["status"] == "rollback_failed"
+    purge_calls = fake.with_word("purge")
+    assert purge_calls
+    assert purge_calls[0][:2] == ["sudo", "-n"]
+    assert "-n" not in report["manual_command"].split()
+    assert report["manual_command"].startswith("sudo env DEBIAN_FRONTEND=noninteractive apt-get purge")
+
+
+def test_sudo_keepalive_runs_and_stops(tmp_path, monkeypatch, host):
+    """Canlı tutma iş parçacığı paket aşamasında sudo -n -v çalıştırır ve aşama bitince durur."""
+    import time
+    from distronomad import restore
+
+    monkeypatch.setattr(restore, "SUDO_KEEPALIVE_INTERVAL", 0.05)
+    _pardus_host(host)
+
+    fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS, build_for=[DEBIAN_KERNEL])
+
+    old_build = fake._build
+    def slow_build():
+        time.sleep(0.12)
+        old_build()
+    fake._build = slow_build
+
+    backup = _make_backup(tmp_path / "keepalive_backup.tar.gz")
+    engine = RestoreEngine(backup_path=backup, transaction_dir=tmp_path / "tx")
+    engine.load_manifest()
+    target = SystemInfo(
+        distro_name="Pardus",
+        distro_id="pardus",
+        distro_like="debian",
+        available_package_managers=["apt"],
+        home_dir=str(tmp_path / "home"),
+    )
+    options = RestoreOptions(
+        target_home=str(tmp_path / "home"),
+        selected_packages=[],
+        selected_configs=[],
+        install_packages=False,
+        install_drivers=True,
+        sudo_noninteractive=True,
+    )
+    monkeypatch.setattr("distronomad.restore.scan_hardware_profile", lambda: _pardus_profile())
+    res = engine.execute_restore(options, target_system_info=target)
+    engine.cleanup()
+
+    assert res["driver_report"]["status"] == "installed"
+    keepalive_calls = [c for c in fake.calls if list(c[:3]) == ["sudo", "-n", "-v"]]
+    assert len(keepalive_calls) >= 1
+    import threading
+    alive_threads = [t.name for t in threading.enumerate() if t.is_alive()]
+    assert "sudo-keepalive" not in alive_threads
+
+
+def test_engine_sudo_noninteractive_skips_when_sudo_not_ready_without_prompt(tmp_path, monkeypatch, host):
+    """B-9: sudo_noninteractive=True iken sudo -n true başarısızsa terminal olsa da parola sorulmaz ve paket atlanır."""
+    _pardus_host(host)
+    fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS)
+
+    def fake_run(cmd, *args, **kwargs):
+        if isinstance(cmd, (list, tuple)) and list(cmd[:3]) == ["sudo", "-n", "true"]:
+            return subprocess.CompletedProcess(cmd, 1, "", "")
+        return fake.run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    backup = _make_backup(tmp_path / "sudo_no_prompt_backup.tar.gz")
+    engine = RestoreEngine(backup_path=backup, transaction_dir=tmp_path / "tx")
+    engine.load_manifest()
+    target = SystemInfo(
+        distro_name="Pardus",
+        distro_id="pardus",
+        distro_like="debian",
+        available_package_managers=["apt"],
+        home_dir=str(tmp_path / "home"),
+    )
+    options = RestoreOptions(
+        target_home=str(tmp_path / "home"),
+        selected_packages=[PackageItem(name="curl", manager="apt")],
+        selected_configs=[],
+        install_packages=True,
+        install_drivers=False,
+        sudo_noninteractive=True,
+    )
+    res = engine.execute_restore(options, target_system_info=target)
+    engine.cleanup()
+
+    assert any(t("restore_sudo_failed_tag") in f for f in res["failed_packages"])
+    assert "curl" not in res["installed_packages"]

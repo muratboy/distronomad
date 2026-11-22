@@ -234,7 +234,7 @@ def find_distro_driver_tool() -> str:
     return ""
 
 
-def sudo_ready() -> bool:
+def sudo_ready(allow_prompt: bool = True) -> bool:
     """sudo komutları çalıştırılabilir mi? Parolasız sudo ya da parola sorulabilecek bir terminal gerekir."""
     try:
         proc = subprocess.run(["sudo", "-n", "true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
@@ -242,6 +242,8 @@ def sudo_ready() -> bool:
             return True
     except Exception:
         pass
+    if not allow_prompt:
+        return False
     return bool(sys.stdin and hasattr(sys.stdin, "isatty") and sys.stdin.isatty())
 
 
@@ -281,10 +283,8 @@ def installed_package_set(pm: str) -> Optional[Set[str]]:
         cmd = ["dpkg-query", "-W", "-f", "${db:Status-Status} ${binary:Package}\\n"]
     elif mgr in ("pacman", "yay", "paru"):
         cmd = ["pacman", "-Qq"]
-    elif mgr == "dnf":
-        # Aynı adın farklı sürümleri (ör. kernel-devel) ayırt edilsin diye tam sürümle
-        cmd = ["rpm", "-qa", "--qf", "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\\n"]
-    elif mgr == "zypper":
+    elif mgr in ("dnf", "zypper"):
+        # Yalnızca paket adı: yükseltilen paketler yeni kurulmuş sayılmaz
         cmd = ["rpm", "-qa", "--qf", "%{NAME}\\n"]
     else:
         return None

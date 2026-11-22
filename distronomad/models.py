@@ -260,6 +260,7 @@ class RestoreOptions:
     install_drivers: bool = False
     allow_external_paths: bool = False
     allow_root_paths: bool = False
+    sudo_noninteractive: bool = False
 
 
 @dataclass
