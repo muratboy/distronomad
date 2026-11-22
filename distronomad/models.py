@@ -261,6 +261,10 @@ class RestoreOptions:
     allow_external_paths: bool = False
     allow_root_paths: bool = False
     sudo_noninteractive: bool = False
+    # False: çekirdek modülü kuran sürücüler (NVIDIA, Broadcom wl) atlanır, risksiz sürücü paketleri yine kurulur
+    install_module_drivers: bool = True
+    # Kullanıcının onayladığı sürücü planı (drivers.DriverPlan); verilirse motor planı yeniden kurmaz
+    driver_plan: Any = None
 
 
 @dataclass

@@ -211,7 +211,8 @@ def _pardus_profile():
     )
 
 
-def _run_pardus_restore(tmp_path, monkeypatch, *, dry_run=False, profile=None, selected_packages=(), install_drivers=True):
+def _run_pardus_restore(tmp_path, monkeypatch, *, dry_run=False, profile=None, selected_packages=(), install_drivers=True,
+                        **option_overrides):
     monkeypatch.setattr("distronomad.restore.scan_hardware_profile", lambda: profile or _pardus_profile())
     backup = _make_backup(tmp_path / "pardus_backup.tar.gz")
     engine = RestoreEngine(backup_path=backup, transaction_dir=tmp_path / "tx")
@@ -230,6 +231,7 @@ def _run_pardus_restore(tmp_path, monkeypatch, *, dry_run=False, profile=None, s
         install_packages=bool(selected_packages),
         install_drivers=install_drivers,
         dry_run=dry_run,
+        **option_overrides,
     )
     try:
         return engine.execute_restore(options, target_system_info=target)
@@ -821,6 +823,59 @@ def test_deferred_driver_packages_planned_in_dry_run(tmp_path, monkeypatch, host
     assert res["skipped_driver_packages"] == []
 
 
+
+def test_engine_declined_kernel_driver_still_installs_low_risk_packages(tmp_path, monkeypatch, host):
+    """Çekirdek modülü reddedilince yalnızca modül kuran sürücüler atlanır; firmware/mikro kod yine kurulur."""
+    _pardus_host(host)
+    fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS, build_for=[DEBIAN_KERNEL])
+
+    res = _run_pardus_restore(
+        tmp_path, monkeypatch, install_module_drivers=False,
+        selected_packages=[PackageItem(name="nvidia-settings", manager="apt")],
+    )
+
+    report = res["driver_report"]
+    assert report["status"] == "skipped"
+    assert report["message"] == t("driver_status_declined", pkgs="nvidia-driver")
+    assert not fake.with_word("nvidia-driver")
+    assert fake.with_word("firmware-misc-nonfree")
+    # Sürücü kurulmadığı için yedekteki sürücü paketleri de kurulmaz
+    assert not fake.with_word("nvidia-settings")
+    assert res["skipped_driver_packages"] == ["nvidia-settings"]
+
+
+def test_engine_uses_approved_plan_without_rebuilding(tmp_path, monkeypatch, host):
+    """Onaylanan plan motora verilince motor donanımı yeniden taramaz ve planı yeniden kurmaz."""
+    _pardus_host(host)
+    FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS, build_for=[DEBIAN_KERNEL])
+    plan = drivers.build_driver_plan(["nvidia-driver", "firmware-misc-nonfree"], "debian", "apt")
+    calls = []
+    real_build = drivers.build_driver_plan
+    monkeypatch.setattr(drivers, "build_driver_plan", lambda *a, **k: calls.append(a) or real_build(*a, **k))
+
+    def no_scan():
+        raise AssertionError("onaylanan plan varken donanım yeniden taranmamalı")
+
+    res = _run_pardus_restore(tmp_path, monkeypatch, profile=None, driver_plan=plan)
+    assert res["driver_report"]["status"] == "installed"
+    assert calls == []
+
+    # Donanım taraması da yapılmaz
+    monkeypatch.setattr("distronomad.restore.scan_hardware_profile", no_scan)
+    backup = _make_backup(tmp_path / "plan_backup.tar.gz")
+    engine = RestoreEngine(backup_path=backup, transaction_dir=tmp_path / "tx2")
+    engine.load_manifest()
+    target = SystemInfo(distro_id="pardus", distro_like="debian", available_package_managers=["apt"], home_dir=str(tmp_path / "home2"))
+    res2 = engine.execute_restore(
+        RestoreOptions(target_home=str(tmp_path / "home2"), selected_configs=[], install_packages=False,
+                       install_drivers=True, dry_run=True, driver_plan=plan),
+        target_system_info=target,
+    )
+    engine.cleanup()
+    assert res2["driver_report"]["status"] == "dry_run"
+    assert calls == []
+
+
 class _FlavourSwitchingFake(FakePackageSystem):
     """Yedekteki başka bir sürücü türü kurulunca doğrulanmış modül paketini kaldırıp modülü siler;
     geri kurulan modül paketi modülü yeniden derler."""
@@ -907,7 +962,10 @@ def test_cli_asks_before_installing_kernel_driver(tmp_path, monkeypatch, capsys,
     cmd_restore(args)
     out = " ".join(capsys.readouterr().out.split())
 
-    assert captured["options"].install_drivers is expected
+    # Reddetmek yalnızca çekirdek modülü kuran sürücüleri atlar; risksiz sürücü paketleri yine kurulur
+    assert captured["options"].install_drivers is True
+    assert captured["options"].install_module_drivers is expected
+    assert captured["options"].driver_plan is not None
     assert asked == ([t("cli_drivers_confirm")] if tty else [])
     # Plan, komut ve riskler onaydan önce gösterilir
     assert "sudo pacman -S --needed --noconfirm -- nvidia-dkms nvidia-utils" in out
@@ -983,14 +1041,15 @@ async def _start_restore_with_drivers(app, pilot, backup):
     captured = []
     app._run_restore_worker = lambda engine, options: captured.append(options)
     app._handle_start_restore()
+    await app.workers.wait_for_complete()
     await pilot.pause()
     return captured
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("button, expected", [
-    ("btn-driver-install", [True]),
-    ("btn-driver-skip", [False]),
+    ("btn-driver-install", [(True, True)]),
+    ("btn-driver-skip", [(True, False)]),
     ("btn-driver-cancel", []),
 ])
 async def test_tui_driver_consent_modal(tmp_path, monkeypatch, button, expected):
@@ -1009,7 +1068,9 @@ async def test_tui_driver_consent_modal(tmp_path, monkeypatch, button, expected)
         app.screen.query_one(f"#{button}", Button).press()
         await pilot.pause()
 
-        assert [opts.install_drivers for opts in captured] == expected
+        assert [(opts.install_drivers, opts.install_module_drivers) for opts in captured] == expected
+        # Onaylanan plan motora aynen geçer
+        assert all(opts.driver_plan is not None for opts in captured)
         if expected:
             # Ayarlar sürücü kararından bağımsız geri yüklenir
             assert len(captured[0].selected_configs) == 1
@@ -1037,6 +1098,26 @@ async def test_tui_driver_modal_buttons_fit_on_screen(tmp_path, monkeypatch, siz
         if os.environ.get("DISTRONOMAD_SCREENSHOT_DIR"):
             app.save_screenshot(f"driver_modal_{width}x{height}.svg", path=os.environ["DISTRONOMAD_SCREENSHOT_DIR"])
 
+
+
+@pytest.mark.asyncio
+async def test_tui_driver_plan_is_computed_off_the_ui_thread(tmp_path, monkeypatch):
+    """Sürücü planı (donanım taraması, Secure Boot, çekirdek dizinleri) arayüz thread'inde hesaplanmaz."""
+    import threading
+    backup = _tui_setup(tmp_path, monkeypatch)
+    app = DistroNomadApp(home_dir=str(tmp_path), lang="tr")
+    threads = []
+    real_plan = DistroNomadApp._restore_driver_plan
+
+    def recording_plan(self):
+        threads.append(threading.current_thread() is threading.main_thread())
+        return real_plan(self)
+
+    monkeypatch.setattr(DistroNomadApp, "_restore_driver_plan", recording_plan)
+    async with app.run_test(size=(140, 45)) as pilot:
+        await _start_restore_with_drivers(app, pilot, backup)
+        assert threads == [False]
+        assert isinstance(app.screen, DriverRiskModal)
 
 @pytest.mark.asyncio
 async def test_tui_blocked_plan_starts_without_modal(tmp_path, monkeypatch):

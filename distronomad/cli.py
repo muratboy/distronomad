@@ -570,6 +570,8 @@ def cmd_restore(args):
                 console.print(f"[yellow]ℹ {t('hw_manifest_diff_notice')}: {diff_desc} ({t('hw_from_backup')})[/yellow]")
 
         install_drivers = getattr(args, "install_drivers", False)
+        install_module_drivers = True
+        driver_plan = None
         if install_drivers:
             live_hw = scan_hardware_profile()
             scanner = SystemScanner(home_dir=args.target_home)
@@ -580,12 +582,15 @@ def cmd_restore(args):
             console.print(f"[cyan]🖥 {t('chk_install_drivers_lbl')}:[/cyan] {recs_str}")
             if recs and driver_pm:
                 plan = build_driver_plan(recs, target_fam, driver_pm)
+                # Gösterilen plan motora geçer; motor denetimleri yeniden yapıp farklı bir plan kurmaz
+                driver_plan = plan
                 if plan.module_packages:
                     for line in describe_driver_plan(plan):
                         console.print(f"  [yellow]{escape(line)}[/yellow]")
-                    # Kurulum gerçekten denenecekse (engel yok, modül kurulu değil) açık onay istenir
+                    # Kurulum gerçekten denenecekse (engel yok, modül kurulu değil) açık onay istenir; reddedilirse
+                    # yalnızca çekirdek modülü kuran sürücüler atlanır, risksiz sürücü paketleri yine kurulur
                     if not args.dry_run and not plan.blockers and not plan.already_present:
-                        install_drivers = _confirm_driver_install()
+                        install_module_drivers = _confirm_driver_install()
 
         allow_ext = getattr(args, "allow_external_paths", False)
         options = RestoreOptions(
@@ -599,6 +604,8 @@ def cmd_restore(args):
             dry_run=args.dry_run,
             base_backup_path=getattr(args, "base", "") or "",
             install_drivers=install_drivers,
+            install_module_drivers=install_module_drivers,
+            driver_plan=driver_plan,
             allow_external_paths=allow_ext,
             allow_root_paths=allow_ext
         )

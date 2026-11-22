@@ -909,11 +909,17 @@ class RestoreEngine:
                 # diğer paketlerle birlikte kurulur; modül kuranlar aşağıda ayrı, denetimli ve doğrulamalı adımdadır.
                 driver_plan = None
                 if options.install_drivers:
-                    live_hw = scan_hardware_profile()
-                    fam_key, eff_pm = drivers.resolve_driver_target(current_sys)
-                    driver_pkgs = live_hw.recommended_packages.get(fam_key, [])
-                    if driver_pkgs and eff_pm:
-                        driver_plan = drivers.build_driver_plan(driver_pkgs, fam_key, eff_pm)
+                    if options.driver_plan is not None:
+                        # Kullanıcıya gösterilip onaylanan plan kullanılır (denetimler arada değişmesin)
+                        driver_plan = options.driver_plan
+                    else:
+                        live_hw = scan_hardware_profile()
+                        fam_key, eff_pm = drivers.resolve_driver_target(current_sys)
+                        driver_pkgs = live_hw.recommended_packages.get(fam_key, [])
+                        if driver_pkgs and eff_pm:
+                            driver_plan = drivers.build_driver_plan(driver_pkgs, fam_key, eff_pm)
+                    if driver_plan is not None:
+                        eff_pm = driver_plan.package_manager
                         for dpkg in driver_plan.plain_packages:
                             if dpkg not in pkgs_by_pm.setdefault(eff_pm, []):
                                 pkgs_by_pm[eff_pm].append(dpkg)
@@ -1017,10 +1023,21 @@ class RestoreEngine:
                             results["failed_packages"].append(t("restore_err_pkg_error", pm=pm, error=str(e)))
 
                 if driver_plan is not None and driver_plan.module_packages:
-                    self._install_module_drivers(
-                        driver_plan, results, options.dry_run, apt_updated,
-                        sudo_noninteractive=options.sudo_noninteractive
-                    )
+                    if options.install_module_drivers:
+                        self._install_module_drivers(
+                            driver_plan, results, options.dry_run, apt_updated,
+                            sudo_noninteractive=options.sudo_noninteractive
+                        )
+                    else:
+                        results["driver_report"] = {
+                            "status": "skipped",
+                            "message": t("driver_status_declined", pkgs=", ".join(driver_plan.module_packages)),
+                            "packages": [],
+                            "kernels": list(driver_plan.kernels),
+                            "uncovered_kernels": [],
+                            "removed": [],
+                            "manual_command": "",
+                        }
 
                 # Ertelenen sürücü paketleri yalnızca sürücü kurulduysa ya da zaten varsa kurulur
                 if deferred_driver_pkgs:

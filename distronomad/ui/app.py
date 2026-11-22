@@ -2649,7 +2649,34 @@ class DistroNomadApp(App):
             return None
         return build_driver_plan(recs, family, pm)
 
-    def _handle_start_restore(self, driver_decision: Optional[str] = None) -> None:
+    @work(thread=True, exclusive=True, group="driver-plan")
+    def _compute_driver_plan_worker(self) -> None:
+        """Sürücü planını (donanım taraması, Secure Boot, çekirdek dizinleri) arayüzü dondurmadan hesaplar."""
+        try:
+            plan = self._restore_driver_plan()
+        except Exception:
+            plan = None
+        self.call_from_thread(self._on_driver_plan_ready, plan)
+
+    def _on_driver_plan_ready(self, plan: Optional[Any]) -> None:
+        """Plan hazır: kurulum denenecekse onay modalını gösterir, denenmeyecekse onaysız devam eder."""
+        try:
+            self.query_one("#btn-start-restore", Button).disabled = False
+        except Exception:
+            pass
+        if plan is not None and plan.module_packages and not plan.blockers and not plan.already_present:
+            def on_driver_choice(choice: Optional[str]) -> None:
+                if choice in ("install", "skip"):
+                    self._handle_start_restore(driver_decision=choice, driver_plan=plan)
+                else:
+                    self.notify(t("restore_notify_cancelled_by_user"), severity="warning")
+
+            self.push_screen(DriverRiskModal(describe_driver_plan(plan)), on_driver_choice)
+            return
+        # Engel var, modül zaten kurulu ya da öneri yok: çekirdek modülü kurulumu denenmeyeceği için sorulmaz
+        self._handle_start_restore(driver_decision="proceed", driver_plan=plan)
+
+    def _handle_start_restore(self, driver_decision: Optional[str] = None, driver_plan: Optional[Any] = None) -> None:
         if getattr(self, "_is_restoring", False):
             self.notify(t("restore_notify_already_restoring"), severity="warning")
             return
@@ -2685,9 +2712,9 @@ class DistroNomadApp(App):
             install_drivers = bool(chk_d.value and not chk_d.disabled)
         except Exception:
             pass
-        # Onay ekranında "Sürücüsüz Devam Et" seçildiyse sürücüler kurulmaz
-        if driver_decision == "skip":
-            install_drivers = False
+        # Onay ekranında "Çekirdek Sürücüsünü Atla" seçildiyse yalnızca çekirdek modülü kuran sürücüler atlanır;
+        # mikro kod ve firmware gibi risksiz sürücü paketleri yine kurulur
+        install_module_drivers = driver_decision != "skip"
 
         if not selected_pkgs and not selected_cfgs and not selected_custom and not install_drivers:
             self.notify(t("restore_notify_no_items_selected"), severity="error")
@@ -2696,18 +2723,15 @@ class DistroNomadApp(App):
         dry_run = self.query_one("#chk-dry-run", Checkbox).value
 
         # Çekirdek modülü kuran sürücüler (NVIDIA, Broadcom wl) kurulacaksa önce plan, komut ve riskler
-        # gösterilip açık onay alınır. Engel varsa ya da modül zaten kuruluysa kurulum denenmeyeceği için sorulmaz.
+        # gösterilip açık onay alınır. Plan arayüzü dondurmasın diye işçide hesaplanır; onaylanan plan motora geçer.
         if install_drivers and driver_decision is None and not dry_run:
-            plan = self._restore_driver_plan()
-            if plan is not None and plan.module_packages and not plan.blockers and not plan.already_present:
-                def on_driver_choice(choice: Optional[str]) -> None:
-                    if choice in ("install", "skip"):
-                        self._handle_start_restore(driver_decision=choice)
-                    else:
-                        self.notify(t("restore_notify_cancelled_by_user"), severity="warning")
-
-                self.push_screen(DriverRiskModal(describe_driver_plan(plan)), on_driver_choice)
-                return
+            try:
+                self.query_one("#btn-start-restore", Button).disabled = True
+            except Exception:
+                pass
+            self.notify(t("driver_notify_checking"))
+            self._compute_driver_plan_worker()
+            return
 
         # Paket ve sürücü kurulumu için sudo kontrolü ve App.suspend() parola akışı
         drivers_need_sudo = install_drivers and not dry_run
@@ -2760,6 +2784,8 @@ class DistroNomadApp(App):
             restore_system_state=restore_sys_state,
             dry_run=dry_run,
             install_drivers=install_drivers,
+            install_module_drivers=install_module_drivers,
+            driver_plan=driver_plan,
             allow_external_paths=allow_external,
             sudo_noninteractive=True
         )

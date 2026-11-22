@@ -995,8 +995,16 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Install Drivers"
     },
     "btn_driver_skip": {
-        "tr": "Sürücüsüz Devam Et",
-        "en": "Continue Without Drivers"
+        "tr": "Çekirdek Sürücüsünü Atla",
+        "en": "Skip Kernel Driver"
+    },
+    "driver_notify_checking": {
+        "tr": "Sürücü denetimleri yapılıyor...",
+        "en": "Running driver checks..."
+    },
+    "driver_status_declined": {
+        "tr": "Çekirdek modülü gerektiren sürücüler kullanıcı isteğiyle kurulmadı ({pkgs}).",
+        "en": "Drivers that need a kernel module were not installed at the user's request ({pkgs})."
     },
     "btn_driver_cancel": {
         "tr": "İptal Et",
@@ -1179,12 +1187,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Install the drivers? [y/N]: "
     },
     "cli_drivers_skipped_by_user": {
-        "tr": "Sürücü kurulumu atlandı; geri yüklemenin geri kalanı sürüyor.",
-        "en": "Driver installation skipped; continuing with the rest of the restore."
+        "tr": "Çekirdek modülü gerektiren sürücü atlandı; mikro kod ve firmware gibi risksiz sürücü paketleri ve geri yüklemenin geri kalanı sürüyor.",
+        "en": "The driver that needs a kernel module was skipped; low-risk driver packages such as microcode and firmware, and the rest of the restore, continue."
     },
     "cli_drivers_noninteractive": {
-        "tr": "Sürücü kurulumu onay ister; etkileşimli terminal olmadığı için atlandı.",
-        "en": "Driver installation needs confirmation; skipped because there is no interactive terminal."
+        "tr": "Çekirdek modülü gerektiren sürücü onay ister; etkileşimli terminal olmadığı için atlandı (risksiz sürücü paketleri yine kurulur).",
+        "en": "The driver that needs a kernel module requires confirmation; it was skipped because there is no interactive terminal (low-risk driver packages are still installed)."
     },
     "err_efbig_fat32_limit": {
         "tr": "Dosya boyutu sınırı aşıldı (FAT32 tek dosya sınırı 4 GB). Yarım kalan çıktı temizlendi. USB belleğinizi exFAT veya ext4 olarak biçimlendirmeniz önerilir.",
