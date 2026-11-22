@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TUI restore operations execute sudo commands non-interactively with `-n` and maintain active authentication with a background keepalive thread, preventing hidden password prompts from stalling execution.
 - Driver installation plan covers additional installed kernels, installs their headers if available, and warns if modules are missing for any extra kernel.
 - Driver rollback reinstalls packages removed or replaced during the installation attempt, and includes both commands if manual remediation is required.
+- Driver packages listed in the backup from the same distribution family (such as `nvidia-settings`) are installed after the driver step succeeds, through the same checked step, instead of being dropped.
 
 ## [0.9.0] - 2026-11-01
 

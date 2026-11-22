@@ -1106,6 +1106,18 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "tr": "Kurulum sırasında kaldırılan paketler geri kuruldu: {pkgs}.",
         "en": "Packages removed during installation were restored: {pkgs}."
     },
+    "driver_note_deferred_installed": {
+        "tr": "Yedekten ertelenen sürücü paketleri kuruldu: {pkgs}.",
+        "en": "Deferred driver packages from backup were installed: {pkgs}."
+    },
+    "driver_note_deferred_failed": {
+        "tr": "Yedekten ertelenen sürücü paketleri: {msg}",
+        "en": "Deferred driver packages from backup: {msg}"
+    },
+    "driver_notify_installing_deferred": {
+        "tr": "Yedekteki sürücü paketleri korumalı adımla kuruluyor: {pkgs}",
+        "en": "Installing driver packages from the backup in a checked step: {pkgs}"
+    },
     "driver_status_dry_run": {
         "tr": "Kurulumdan sonra sürücü modülü şu çekirdek(ler) için doğrulanacak: {kernels}. Modül oluşmazsa bu adımda kurulan paketler kaldırılacak.",
         "en": "After installation the driver module will be verified for kernel(s): {kernels}. If it is missing, the packages installed in this step will be removed."

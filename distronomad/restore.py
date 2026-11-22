@@ -821,6 +821,8 @@ class RestoreEngine:
                 # Paketleri yöneticilere göre grupla
                 pkgs_by_pm: Dict[str, List[str]] = {}
                 cross_candidates_by_pm: Dict[str, List[Tuple[PackageItem, str]]] = {}
+                # Yedekteki aynı aileden gelen sürücü paketleri; sürücü adımı başarılı olursa korumalı adımla kurulur
+                deferred_driver_pkgs: List[str] = []
                 target_fam_eff = target_family
 
                 if options.install_packages and options.selected_packages:
@@ -836,13 +838,6 @@ class RestoreEngine:
 
                         pm = pkg.manager
                         if pm in ["pacman", "yay", "paru", "apt", "apt-get", "dnf", "zypper"]:
-                            # Çekirdek sürücüsü paketleri (NVIDIA, Broadcom wl) açık kaynak sürücüyü kapatır; modül
-                            # bu sistemin çekirdeği için derlenemezse açılışta siyah ekran olur. Yedekteki eski
-                            # donanıma ait liste yerine yalnızca sürücü seçeneğiyle, denetimli adımda kurulurlar.
-                            if drivers.is_kernel_driver_package(target_name):
-                                results["skipped_driver_packages"].append(target_name)
-                                continue
-
                             target_pm = target_sys_pm or pm
 
                             # Dağıtım ailesini paket yöneticisine göre de tahmin et (distro_id bilinmiyorsa)
@@ -867,6 +862,17 @@ class RestoreEngine:
                                     target_fam_eff = "fedora"
                                 elif target_pm in ["zypper"]:
                                     target_fam_eff = "suse"
+
+                            # Çekirdek sürücüsü paketleri (NVIDIA, Broadcom wl) açık kaynak sürücüyü kapatır; modül
+                            # bu sistemin çekirdeği için derlenemezse açılışta siyah ekran olur. Bu yüzden diğer
+                            # paketlerle kurulmazlar: aynı aileden gelenler sürücü adımı başarılı olursa korumalı
+                            # adımla kurulur, farklı aileden gelenler (adları bu sistemde anlamsız) atlanır.
+                            if drivers.is_kernel_driver_package(target_name):
+                                if src_fam_eff == target_fam_eff or pm == target_pm:
+                                    deferred_driver_pkgs.append(pkg.name)
+                                else:
+                                    results["skipped_driver_packages"].append(target_name)
+                                continue
 
                             # Aynı dağıtım ailesi veya aynı paket yöneticisi ise paket adı olduğu gibi geçer
                             if src_fam_eff == target_fam_eff or pm == target_pm:
@@ -898,15 +904,6 @@ class RestoreEngine:
                                 else:
                                     # Depoda olmayanlar kurulumdan çıkarılıp raporlansın
                                     results["untranslated_packages"].append(pkg.name)
-
-                if results["skipped_driver_packages"]:
-                    warn_msg = t(
-                        "restore_warn_driver_pkgs_from_backup",
-                        count=len(results["skipped_driver_packages"]),
-                        pkgs=", ".join(results["skipped_driver_packages"])
-                    )
-                    logger.warning(warn_msg)
-                    results["warnings"].append(warn_msg)
 
                 # Canlı donanım taramasına göre sürücü paketleri: çekirdek modülü kurmayanlar (mikro kod, mesa)
                 # diğer paketlerle birlikte kurulur; modül kuranlar aşağıda ayrı, denetimli ve doğrulamalı adımdadır.
@@ -1024,6 +1021,27 @@ class RestoreEngine:
                         driver_plan, results, options.dry_run, apt_updated,
                         sudo_noninteractive=options.sudo_noninteractive
                     )
+
+                # Ertelenen sürücü paketleri yalnızca sürücü kurulduysa ya da zaten varsa kurulur
+                if deferred_driver_pkgs:
+                    driver_status = (results.get("driver_report") or {}).get("status")
+                    if driver_plan is not None and driver_status in ("installed", "already_present", "dry_run"):
+                        self._install_deferred_driver_packages(
+                            driver_plan, deferred_driver_pkgs, results, options.dry_run,
+                            sudo_noninteractive=options.sudo_noninteractive
+                        )
+                    else:
+                        results["skipped_driver_packages"].extend(deferred_driver_pkgs)
+
+                if results["skipped_driver_packages"]:
+                    results["skipped_driver_packages"] = sorted(set(results["skipped_driver_packages"]))
+                    warn_msg = t(
+                        "restore_warn_driver_pkgs_from_backup",
+                        count=len(results["skipped_driver_packages"]),
+                        pkgs=", ".join(results["skipped_driver_packages"])
+                    )
+                    logger.warning(warn_msg)
+                    results["warnings"].append(warn_msg)
 
             # 4. Aşama: Sistem Durumu (dconf, crontab ve /etc referansları) Geri Yükleme
             state_src = self.source_dir / "system_state"
@@ -1288,6 +1306,22 @@ class RestoreEngine:
         else:
             reason = t("driver_reason_module_missing", kernels=", ".join(missing_kernels))
         _mark_failed(reason)
+        report.update(self._rollback_new_packages(pm, before, after, to_install, reason, sudo_noninteractive))
+
+    def _rollback_new_packages(
+        self,
+        pm: str,
+        before: set,
+        after: Optional[set],
+        to_install: List[str],
+        reason: str,
+        sudo_noninteractive: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Başarısız korumalı kurulumu geri alır: yalnızca o adımda gelen paketleri kaldırır, adımın kaldırdığı
+        ya da yerine koyduğu paketleri geri kurar. Dönen sözlük: status, message, manual_command, removed.
+        """
+        report: Dict[str, Any] = {"status": "", "message": "", "manual_command": "", "removed": []}
 
         if after is None:
             # Bu adımda neyin kurulduğu bilinemiyor: kaldırma komutu kullanıcıya gösterilir
@@ -1296,13 +1330,14 @@ class RestoreEngine:
             report["manual_command"] = manual
             report["message"] = t("driver_status_rollback_failed", reason=reason, cmd=manual)
             logger.error(report["message"])
-            return
+            return report
 
         new_pkgs = sorted(after - before)
+        removed = sorted(before - after)
         if not new_pkgs and not removed:
             report["status"] = "failed"
             report["message"] = t("driver_status_failed", reason=reason)
-            return
+            return report
 
         rm_ok = True
         rm_cmd: List[str] = []
@@ -1361,6 +1396,85 @@ class RestoreEngine:
             report["manual_command"] = manual
             report["message"] = t("driver_status_rollback_failed", reason=reason, cmd=manual)
             logger.error(report["message"])
+        return report
+
+    def _install_deferred_driver_packages(
+        self,
+        plan: "drivers.DriverPlan",
+        packages: List[str],
+        results: Dict[str, Any],
+        dry_run: bool,
+        sudo_noninteractive: bool = False
+    ) -> None:
+        """
+        Yedek listesinden ertelenen sürücü paketlerini (ör. nvidia-settings) sürücü kurulduktan ya da zaten
+        var olduğu anlaşıldıktan sonra aynı korumayla kurar: kurulumdan sonra modül zorunlu çekirdeklerde
+        yoksa yalnızca bu adımda gelen paketler kaldırılır, adımın kaldırdığı paketler geri kurulur.
+        """
+        pm = plan.package_manager
+        report = results.setdefault("driver_report", {})
+
+        available = [p for p in packages if drivers.package_available(pm, p) is True]
+        results["skipped_driver_packages"].extend(p for p in packages if p not in available)
+        if not available:
+            return
+
+        cmd, desc = drivers.driver_install_command(pm, available)
+        if not cmd:
+            results["skipped_driver_packages"].extend(available)
+            return
+        if dry_run:
+            results["installed_packages"].append(f"[DRY-RUN] {desc}: {' '.join(cmd)}")
+            return
+
+        before = drivers.installed_package_set(pm)
+        if before is None:
+            results["skipped_driver_packages"].extend(available)
+            return
+
+        self._notify("sürücü", t("driver_notify_installing_deferred", pkgs=", ".join(available)))
+        install_error = ""
+        try:
+            proc = subprocess.run(
+                _make_sudo_cmd(cmd, sudo_noninteractive), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=drivers.DRIVER_INSTALL_TIMEOUT
+            )
+            if proc.returncode != 0:
+                detail = (proc.stderr or proc.stdout or "").strip()
+                install_error = detail[-300:] if detail else t("restore_err_exit_code", code=proc.returncode)
+        except subprocess.TimeoutExpired:
+            install_error = t("driver_err_timeout", sec=drivers.DRIVER_INSTALL_TIMEOUT)
+        except Exception as e:
+            install_error = str(e)
+
+        after = drivers.installed_package_set(pm)
+        missing_kernels = [
+            k for k in plan.kernels
+            if not all(drivers.module_present(k, grp) for grp in plan.module_groups)
+        ]
+        if not install_error and not missing_kernels:
+            results["installed_packages"].extend(available)
+            report["deferred_installed"] = list(available)
+            note = t("driver_note_deferred_installed", pkgs=", ".join(available))
+            report["message"] = f"{report.get('message', '')} {note}".strip()
+            return
+
+        if install_error:
+            reason = t("driver_reason_install_failed", error=install_error)
+        else:
+            reason = t("driver_reason_module_missing", kernels=", ".join(missing_kernels))
+        for name in available:
+            results["failed_packages"].append(f"{pm}:{name} ({t('driver_failed_tag')})")
+        logger.warning(reason)
+
+        outcome = self._rollback_new_packages(pm, before, after, available, reason, sudo_noninteractive)
+        report["deferred_status"] = outcome["status"]
+        note = t("driver_note_deferred_failed", msg=outcome["message"])
+        report["message"] = f"{report.get('message', '')} {note}".strip()
+        if outcome["status"] == "rollback_failed":
+            # Sistem tutarsız kalmış olabilir: genel durum da kritik gösterilir
+            report["status"] = "rollback_failed"
+            report["manual_command"] = outcome["manual_command"]
 
     def cleanup(self):
         """Geçici açılan dizini ve şifresi çözülmüş geçici dosyaları temizler."""

@@ -771,6 +771,96 @@ def test_backup_list_driver_packages_are_not_installed(tmp_path, monkeypatch, ho
     assert t("restore_warn_driver_pkgs_from_backup", count=3, pkgs="nvidia-driver, nvidia-settings, nvidia-utils") in res["warnings"]
 
 
+def test_deferred_backup_driver_packages_installed_after_driver(tmp_path, monkeypatch, host):
+    """Yedekteki aynı aileden NVIDIA kullanıcı alanı paketleri sürücü doğrulandıktan sonra korumalı adımla kurulur."""
+    _pardus_host(host)
+    fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS, build_for=[DEBIAN_KERNEL])
+    pkgs = [
+        PackageItem(name="nvidia-settings", manager="apt"),
+        PackageItem(name="curl", manager="apt"),
+        PackageItem(name="nvidia-utils", manager="pacman"),
+    ]
+
+    res = _run_pardus_restore(tmp_path, monkeypatch, selected_packages=pkgs)
+
+    assert res["driver_report"]["status"] == "installed", res["driver_report"]
+    driver_idx = fake.calls.index(fake.with_word("nvidia-driver")[0])
+    deferred_cmds = fake.with_word("nvidia-settings")
+    assert len(deferred_cmds) == 1 and fake.calls.index(deferred_cmds[0]) > driver_idx
+    # Ertelenen paket normal paketlerle aynı komutta kurulmaz
+    assert all("nvidia-settings" not in c for c in fake.with_word("curl"))
+    assert "nvidia-settings" in res["installed_packages"]
+    assert res["driver_report"]["deferred_installed"] == ["nvidia-settings"]
+    assert t("driver_note_deferred_installed", pkgs="nvidia-settings") in res["driver_report"]["message"]
+    # Farklı aileden gelen paketin adı bu sistemde anlamsız: atlanır
+    assert res["skipped_driver_packages"] == ["nvidia-utils"]
+
+
+def test_deferred_driver_packages_skipped_when_driver_step_blocked(tmp_path, monkeypatch, host):
+    _pardus_host(host)
+    _set_secure_boot(host, True)
+    fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS)
+
+    res = _run_pardus_restore(tmp_path, monkeypatch, selected_packages=[PackageItem(name="nvidia-settings", manager="apt")])
+
+    assert res["driver_report"]["status"] == "skipped"
+    assert not fake.with_word("nvidia-settings")
+    assert res["skipped_driver_packages"] == ["nvidia-settings"]
+    assert t("restore_warn_driver_pkgs_from_backup", count=1, pkgs="nvidia-settings") in res["warnings"]
+
+
+def test_deferred_driver_packages_planned_in_dry_run(tmp_path, monkeypatch, host):
+    _pardus_host(host)
+    fake = FakePackageSystem(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS)
+
+    res = _run_pardus_restore(tmp_path, monkeypatch, dry_run=True, selected_packages=[PackageItem(name="nvidia-settings", manager="apt")])
+
+    lines = [line for line in res["installed_packages"] if "nvidia-settings" in line]
+    assert len(lines) == 1 and lines[0].startswith("[DRY-RUN]")
+    assert not fake.with_word("nvidia-settings")
+    assert res["skipped_driver_packages"] == []
+
+
+class _FlavourSwitchingFake(FakePackageSystem):
+    """Yedekteki başka bir sürücü türü kurulunca doğrulanmış modül paketini kaldırıp modülü siler;
+    geri kurulan modül paketi modülü yeniden derler."""
+
+    def run(self, cmd, *args, **kwargs):
+        if isinstance(cmd, (list, tuple)):
+            words = [str(c) for c in cmd]
+            if "install" in words and "nvidia-open-kernel-dkms" in words:
+                self.calls.append(words)
+                self.installed -= {"nvidia-kernel-dkms"}
+                self.installed |= {"nvidia-open-kernel-dkms"}
+                for module in drivers.MODULES_DIR.rglob("nvidia-current.ko*"):
+                    module.unlink()
+                return subprocess.CompletedProcess(words, 0, "", "")
+            if "install" in words and "nvidia-kernel-dkms" in words and "nvidia-driver" not in words:
+                self.calls.append(words)
+                self.installed |= {"nvidia-kernel-dkms"}
+                self._build()
+                return subprocess.CompletedProcess(words, 0, "", "")
+        return super().run(cmd, *args, **kwargs)
+
+
+def test_deferred_install_that_breaks_driver_is_rolled_back(tmp_path, monkeypatch, host):
+    _pardus_host(host)
+    fake = _FlavourSwitchingFake(monkeypatch, host, installed={"bash"}, adds=DEBIAN_ADDS, build_for=[DEBIAN_KERNEL])
+
+    res = _run_pardus_restore(tmp_path, monkeypatch, selected_packages=[PackageItem(name="nvidia-open-kernel-dkms", manager="apt")])
+
+    report = res["driver_report"]
+    # Sürücünün kendisi doğrulanmıştı; ertelenen kurulum geri alındı ve doğrulanmış paket geri kuruldu
+    assert report["status"] == "installed", report
+    assert report["deferred_status"] == "rolled_back"
+    purge = fake.with_word("purge")
+    assert purge and purge[-1][-1:] == ["nvidia-open-kernel-dkms"]
+    assert "nvidia-kernel-dkms" in fake.installed and "nvidia-open-kernel-dkms" not in fake.installed
+    assert drivers.module_present(DEBIAN_KERNEL, ("nvidia", "nvidia-current"))
+    assert f"apt:nvidia-open-kernel-dkms ({t('driver_failed_tag')})" in res["failed_packages"]
+    assert "nvidia-open-kernel-dkms" not in res["installed_packages"]
+
+
 # ---------------------------------------------------------------------------
 # CLI onayı
 # ---------------------------------------------------------------------------
