@@ -2838,6 +2838,17 @@ class DistroNomadApp(App):
 
         log.write(f"[{update.phase.upper()}] {update.message}")
 
+    def _restore_failed(self, error_msg: str) -> None:
+        """Geri yükleme hatayla bittiğinde arayüzü toparlar ve hatayı gösterir (uygulama çökmez)."""
+        self._is_restoring = False
+        try:
+            self.query_one("#btn-start-restore", Button).disabled = False
+            log = self.query_one("#restore-log", RichLog)
+            log.write(f"[bold red]✖ {escape(t('restore_log_failed', error=error_msg))}[/bold red]")
+        except Exception:
+            pass
+        self.notify(t("restore_notify_failed", error=error_msg), severity="error", timeout=30)
+
     def _restore_finished(self, results: dict) -> None:
         self._is_restoring = False
         self.query_one("#btn-start-restore", Button).disabled = False

@@ -559,7 +559,8 @@ def cmd_restore(args):
         )
         console.print(f"[bold cyan]{t('cli_restore_inspecting', src=src)}[/bold cyan]")
         engine = RestoreEngine(backup_path=src, password=password)
-        manifest = engine.load_manifest()
+        # Önce yalnızca manifest okunur; arşiv geri yükleme adımında, boş alan denetlenerek açılır
+        manifest = engine.load_manifest(extract_files=False)
 
         console.print(f"[green]✔ {t('cli_restore_manifest_loaded', distro=manifest.system_info.distro_name, created=manifest.created_at)}[/green]")
 

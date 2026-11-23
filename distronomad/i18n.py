@@ -1010,6 +1010,22 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "tr": "İptal Et",
         "en": "Cancel"
     },
+    "restore_log_failed": {
+        "tr": "Geri yükleme hatası: {error}",
+        "en": "Restore error: {error}"
+    },
+    "restore_notify_failed": {
+        "tr": "Geri yükleme başarısız oldu: {error}",
+        "en": "Restore failed: {error}"
+    },
+    "restore_err_no_space_for_extract": {
+        "tr": "Yedeği açmak için yeterli boş alan yok: yaklaşık {need} gerekiyor, en fazla {free} boş ({path}). Diskte yer açın ve tekrar deneyin.",
+        "en": "Not enough free space to unpack the backup: about {need} is needed, at most {free} is free ({path}). Free up disk space and try again."
+    },
+    "restore_err_no_space_during_extract": {
+        "tr": "Yedek açılırken disk doldu ({path}). Diskte yer açın ve tekrar deneyin; yarım açılan geçici dosyalar silindi.",
+        "en": "The disk filled up while unpacking the backup ({path}). Free up disk space and try again; the partially unpacked temporary files were removed."
+    },
     "restore_notify_cancelled_by_user": {
         "tr": "Geri yükleme iptal edildi.",
         "en": "Restore cancelled."

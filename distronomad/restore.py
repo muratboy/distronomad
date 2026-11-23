@@ -3,6 +3,7 @@ DistroNomad - Geri Yükleme Motoru (Restore Engine).
 """
 
 import os
+import errno
 import shutil
 import tarfile
 import json
@@ -10,6 +11,7 @@ import subprocess
 import tempfile
 import re
 import threading
+import time
 from pathlib import Path
 from typing import Callable, Optional, List, Dict, Tuple, Any, Union
 from datetime import datetime
@@ -23,6 +25,7 @@ from distronomad.models import (
     BackupManifest,
     RestoreOptions,
     ProgressUpdate,
+    format_bytes,
 )
 from distronomad.packagemap import (
     detect_distro_family,
@@ -63,6 +66,88 @@ def _is_sudo_auth_failure(stderr_text: Optional[str]) -> bool:
     """Komut çıktısının sudo yetki/parola hatasına işaret edip etmediğini döndürür."""
     low = (stderr_text or "").lower()
     return any(marker in low for marker in _SUDO_AUTH_FAILURE_MARKERS)
+
+
+# Geri yüklemenin geçici çalışma dizinleri. /tmp birçok dağıtımda (Debian 13 / Pardus 25, Fedora, Arch) RAM'de tutulan
+# ve belleğin yarısıyla sınırlı bir tmpfs'tir; büyük bir yedek orada açılırken yer biter. Bu yüzden arşivler önce ev
+# dizininin diskindeki önbellek dizininde açılır.
+_WORK_DIR_PREFIXES = ("distronomad_restore_", "distronomad_merged_", "distronomad_chain_dec_")
+_STALE_WORK_DIR_SECONDS = 24 * 3600
+_SPACE_MARGIN_BYTES = 64 * 1024 * 1024
+
+
+def _work_base_dir() -> Path:
+    """Geçici çalışma dizinlerinin varsayılan yeri: ~/.cache/distronomad/tmp (yedeğe ekleme ile aynı yer)."""
+    return Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache")) / "distronomad" / "tmp"
+
+
+def _free_bytes(path: Path) -> Optional[int]:
+    """Dizinin bulunduğu dosya sisteminde kullanıcıya açık boş alan (bayt); okunamazsa None."""
+    try:
+        st = os.statvfs(path)
+        return st.f_bavail * st.f_frsize
+    except OSError:
+        return None
+
+
+def _remove_stale_work_dirs(base: Path) -> None:
+    """Çöken önceki çalıştırmalardan kalan, bir günden eski geçici dizinleri siler
+    (önbellek dizini /tmp gibi açılışta temizlenmez)."""
+    now = time.time()
+    try:
+        entries = list(base.iterdir())
+    except OSError:
+        return
+    for entry in entries:
+        try:
+            if (entry.name.startswith(_WORK_DIR_PREFIXES) and entry.is_dir() and not entry.is_symlink()
+                    and now - entry.stat().st_mtime > _STALE_WORK_DIR_SECONDS):
+                shutil.rmtree(entry, ignore_errors=True)
+        except OSError:
+            continue
+
+
+def _make_work_dir(prefix: str, need_bytes: int = 0) -> Path:
+    """
+    Geçici çalışma dizini oluşturur: önce ev dizininin diskindeki önbellek dizini, yer yetmezse sistemin geçici
+    dizini denenir. need_bytes biliniyorsa ve hiçbirinde yeterli boş alan yoksa arşiv açılmaya başlamadan
+    anlaşılır bir hata verilir (yarıda kalan açma ve "No space left on device" yerine).
+    """
+    required = int(need_bytes * 1.02) + _SPACE_MARGIN_BYTES if need_bytes > 0 else 0
+    best_free: Optional[int] = None
+    best_base = ""
+    cache_base = _work_base_dir()
+    for base in (cache_base, Path(tempfile.gettempdir())):
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue
+        if base == cache_base:
+            try:
+                os.chmod(base, 0o700)
+            except OSError:
+                pass
+            _remove_stale_work_dirs(base)
+        free = _free_bytes(base)
+        if required and free is not None and free < required:
+            if best_free is None or free > best_free:
+                best_free, best_base = free, str(base)
+            continue
+        return Path(tempfile.mkdtemp(prefix=prefix, dir=str(base)))
+    if best_free is None:
+        # Hiçbir dizin hazırlanamadı: sistemin varsayılanı denenir
+        return Path(tempfile.mkdtemp(prefix=prefix))
+    raise OSError(errno.ENOSPC, t(
+        "restore_err_no_space_for_extract",
+        need=format_bytes(need_bytes), free=format_bytes(best_free), path=best_base
+    ))
+
+
+def _file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
 
 
 SUDO_KEEPALIVE_INTERVAL: float = 60.0
@@ -253,7 +338,7 @@ class RestoreEngine:
             if not self.password:
                 raise ValueError(t("restore_err_password_required"))
             if not self.decrypted_temp_file or not self.decrypted_temp_file.exists():
-                temp_dec_dir = Path(tempfile.mkdtemp(prefix="distronomad_restore_dec_"))
+                temp_dec_dir = _make_work_dir("distronomad_restore_dec_", _file_size(self.backup_path))
                 stem = self.backup_path.name
                 if stem.endswith(".enc"):
                     stem = stem[:-4]
@@ -265,14 +350,19 @@ class RestoreEngine:
         if actual_path.is_dir():
             self.source_dir = actual_path
         else:
-            self.temp_extracted_dir = Path(tempfile.mkdtemp(prefix="distronomad_restore_"))
+            # Manifest biliniyorsa yedeğin açılmış boyutu için önceden yer denetlenir
+            need_bytes = int(getattr(self.manifest, "total_bytes", 0) or 0) if self.manifest else 0
+            self.temp_extracted_dir = _make_work_dir("distronomad_restore_", need_bytes)
             self.source_dir = self.temp_extracted_dir
             try:
                 self._extract_archive(actual_path, self.temp_extracted_dir)
-            except Exception:
+            except Exception as e:
+                work_parent = str(self.temp_extracted_dir.parent)
                 shutil.rmtree(self.temp_extracted_dir, ignore_errors=True)
                 self.temp_extracted_dir = None
                 self.source_dir = None
+                if isinstance(e, OSError) and e.errno == errno.ENOSPC:
+                    raise OSError(errno.ENOSPC, t("restore_err_no_space_during_extract", path=work_parent)) from e
                 raise
 
         return self.source_dir
@@ -381,7 +471,10 @@ class RestoreEngine:
                 first_hop = False
 
             # 2. Zinciri en eskiden en yeniye doğru (reversed) birleştir
-            self.merged_extracted_dir = Path(tempfile.mkdtemp(prefix="distronomad_merged_"))
+            chain_need = int(getattr(self.manifest, "total_bytes", 0) or 0) + sum(
+                int(getattr(m, "total_bytes", 0) or 0) for _, m in chain_backwards
+            )
+            self.merged_extracted_dir = _make_work_dir("distronomad_merged_", chain_need)
             temp_chain_cleanups: List[Path] = []
 
             def _apply_deletions(m_manifest: Optional[BackupManifest]):
@@ -427,7 +520,7 @@ class RestoreEngine:
                         if is_encrypted_file(member_path):
                             if not self.password:
                                 raise ValueError(t("restore_err_base_encrypted", name=member_path.name))
-                            temp_dec_dir = Path(tempfile.mkdtemp(prefix="distronomad_chain_dec_"))
+                            temp_dec_dir = _make_work_dir("distronomad_chain_dec_", _file_size(member_path))
                             temp_chain_cleanups.append(temp_dec_dir)
                             stem = member_path.name[:-4] if member_path.name.endswith(".enc") else member_path.name
                             dec_file = temp_dec_dir / stem

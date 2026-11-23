@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Declining the kernel-module driver (CLI prompt, no interactive terminal, or "Skip Kernel Driver" in the TUI) no longer drops low-risk driver packages such as microcode and firmware.
 - The TUI computes the driver plan in a background worker instead of freezing the interface, and the restore uses exactly the plan shown for confirmation.
 - The running-browser warning also covers Snap profiles under `~/snap` (Firefox, Thunderbird, Chromium, Brave, Opera).
+- Restore unpacks archives in `~/.cache/distronomad/tmp` on the home disk instead of `/tmp`, which is a RAM-backed tmpfs limited to half the memory on many distributions (Debian 13, Pardus 25, Fedora, Arch). Large backups no longer fail with "No space left on device"; free space is checked before unpacking and a clear message is shown when it is not enough.
+- The TUI shows restore errors instead of crashing; the error handler it called did not exist.
 
 ## [0.9.0] - 2026-11-01
 
