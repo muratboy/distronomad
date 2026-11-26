@@ -310,3 +310,13 @@ Geliştirme ortamı kurulumu, katkı kılavuzu ve Bubblewrap (`bwrap`) sandbox t
 ## 📄 Lisans / License
 
 Bu proje [MIT Lisansı](LICENSE) altında açık kaynak olarak dağıtılmaktadır.
+
+---
+
+## Geliştirme notu
+
+DistroNomad, yapay zekâ kodlama araçlarının yardımıyla geliştirildi. Kodun, testlerin, belgelerin ve paketleme betiklerinin büyük bölümü bu araçlarla yazıldı; tasarım kararları, inceleme ve cihaz testleri bana ait.
+
+## Development note
+
+DistroNomad was developed with the help of AI coding tools. Most of the code, tests, documentation, and packaging scripts were written with AI assistance; design decisions, review, and device testing are my own.
